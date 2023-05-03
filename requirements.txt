@@ -1,0 +1,13 @@
+Pillow~=9.4.0
+numpy~=1.24.1
+#torch===1.13.1
+wandb>=0.8.31
+#torchvision>=0.14.1
+tqdm>=4.45.0
+umap-learn>=0.3.10
+loguru>=0.4.1
+matplotlib~=3.2.1
+seaborn~=0.10.0
+PyYAML~=5.3.1
+scikit-learn~=1.22
+# conda install pytorch torchvision torchaudio cpuonly -c pytorch

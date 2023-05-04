@@ -1,0 +1,12 @@
+.idea/
+.vscode/
+.vs/
+
+bin/
+obj/
+doc/
+
+*.user
+
+output/
+source/old/

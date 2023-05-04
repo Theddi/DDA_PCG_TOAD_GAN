@@ -2,6 +2,7 @@ WFC
     # Edit samples.xml and run
     python wfc_run.py -s samples.xml
 TOAD GAN
+    # Train
     python main.py --input-dir input --input-name lvl_1-1.txt --num_layer 3 --alpha 100 --niter 4000 --nfc 64 --not_cuda
 TOAD GUI
     python main.py

@@ -1,0 +1,99 @@
+{
+    "os": "Linux-5.14.21-150400.24.60-default-x86_64-with-glibc2.31",
+    "python": "3.10.9",
+    "heartbeatAt": "2023-05-04T10:12:27.205163",
+    "startedAt": "2023-05-04T10:12:27.128162",
+    "docker": null,
+    "cuda": "10.1.243",
+    "args": [
+        "--input-dir",
+        "input",
+        "--input-name",
+        "lvl_1-1.txt",
+        "--num_layer",
+        "3",
+        "--alpha",
+        "100",
+        "--niter",
+        "5000",
+        "--nfc",
+        "64",
+        "--not_cuda"
+    ],
+    "state": "running",
+    "program": "/home/ludorff/Bachelorarbeit_save/DDA_PCG_TOAD_GAN/TOAD-GAN/main.py",
+    "codePath": "TOAD-GAN/main.py",
+    "git": {
+        "remote": "git@github.com:Theddi/DDA_PCG_TOAD_GAN.git",
+        "commit": "92beff93362b51df9edb2a88ce39aff3f595fbc4"
+    },
+    "email": "dominic.ludorff@stud.uni-hannover.de",
+    "root": "/home/ludorff/Bachelorarbeit_save/DDA_PCG_TOAD_GAN",
+    "host": "cp2019-10",
+    "username": "ludorff",
+    "executable": "/home/ludorff/Anaconda/tmp/anaconda3/envs/TGAN_ENV/bin/python",
+    "cpu_count": 4,
+    "cpu_count_logical": 8,
+    "cpu_freq": {
+        "current": 3.3431249999999997,
+        "min": 1600.0,
+        "max": 3900.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 3.51,
+            "min": 1600.0,
+            "max": 3900.0
+        },
+        {
+            "current": 3.293,
+            "min": 1600.0,
+            "max": 3900.0
+        },
+        {
+            "current": 3.51,
+            "min": 1600.0,
+            "max": 3900.0
+        },
+        {
+            "current": 3.51,
+            "min": 1600.0,
+            "max": 3900.0
+        },
+        {
+            "current": 3.51,
+            "min": 1600.0,
+            "max": 3900.0
+        },
+        {
+            "current": 3.51,
+            "min": 1600.0,
+            "max": 3900.0
+        },
+        {
+            "current": 3.51,
+            "min": 1600.0,
+            "max": 3900.0
+        },
+        {
+            "current": 3.51,
+            "min": 1600.0,
+            "max": 3900.0
+        }
+    ],
+    "disk": {
+        "total": 97.87200164794922,
+        "used": 37.32701873779297
+    },
+    "gpu": "NVIDIA GeForce GT 640",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA GeForce GT 640",
+            "memory_total": 2093875200
+        }
+    ],
+    "memory": {
+        "total": 31.288654327392578
+    }
+}

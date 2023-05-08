@@ -34,6 +34,6 @@ public class PlayLevel {
     public static void main(String[] args) {
         MarioGame game = new MarioGame();
          //printResults(game.playGame(getLevel("../levels/arbitrary_random_samples_v1.00000_h1.00000_st0/txt/0_sc3.txt"), 200, 0));
-        printResults(game.runGame(new agents.robinBaumgarten.Agent(), getLevel("./levels/arbitrary_random_samples_v1.00000_h1.00000_st0/txt/3_sc3.txt"), 20, 0, true));
+        printResults(game.runGame(new agents.robinBaumgarten.Agent(), getLevel(args[0]), 20, 0, true));
     }
 }

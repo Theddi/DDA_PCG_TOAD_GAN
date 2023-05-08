@@ -1,0 +1,1 @@
+This folder contains the game graphics. All the graphics files have been modified by hand from the original files that was grabbed from: https://www.spriters-resource.com/nes/supermariobros/. Except for the font.gif (now font.png) file as it is the same as the file from the Mario AI framework.

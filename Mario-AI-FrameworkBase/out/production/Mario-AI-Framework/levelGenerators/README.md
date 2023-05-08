@@ -1,0 +1,1 @@
+The `krys` and `noiseBased` level generators were created by Jan Holan and Mikuláš Hrdlička, students from MFF UK, as a part of the Procedural Content Generation course.

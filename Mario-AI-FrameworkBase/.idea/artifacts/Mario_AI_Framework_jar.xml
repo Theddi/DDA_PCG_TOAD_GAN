@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="Mario-AI-Framework:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/Mario_AI_Framework_jar</output-path>
+    <root id="archive" name="Mario-AI-Framework.jar">
+      <element id="module-output" name="Mario-AI-Framework" />
+    </root>
+  </artifact>
+</component>

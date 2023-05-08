@@ -306,10 +306,30 @@ def TOAD_GUI():
         game = gateway.jvm.engine.core.MarioGame()
         try:
             game.initVisuals(2.0)
-            if agent_sel == "robinBaumgarten":
-                agent = gateway.jvm.agents.robinBaumgarten.Agent()
-            else:
-                agent = gateway.jvm.agents.human.Agent()
+            agent = gateway.jvm.agents.human.Agent()
+            if agent_sel != "human":
+                ai = ai_options_combobox.get()
+                if ai == "andySloane":
+                    agent = gateway.jvm.agents.andySloane.Agent()
+                if ai == "doNothing":
+                    agent = gateway.jvm.agents.doNothing.Agent()
+                if ai == "glennHartmann":
+                    agent = gateway.jvm.agents.glennHartmann.Agent()
+                if ai == "michal":
+                    agent = gateway.jvm.agents.michal.Agent()
+                if ai == "random":
+                    agent = gateway.jvm.agents.random.Agent()
+                if ai == "sergeyKarakovskiy":
+                    agent = gateway.jvm.agents.sergeyKarakovskiy.Agent()
+                if ai == "sergeyPolikarpov":
+                    agent = gateway.jvm.agents.sergeyPolikarpov.Agent()
+                if ai == "spencerSchumann":
+                    agent = gateway.jvm.agents.spencerSchumann.Agent()
+                if ai == "trondEllingsen":
+                    agent = gateway.jvm.agents.trondEllingsen.Agent()
+                if ai == "robinBaumgarten" or ai == "":
+                    agent = gateway.jvm.agents.robinBaumgarten.Agent()
+
             game.setAgent(agent)
             while True:
                 result = game.gameLoop(''.join(level_obj.ascii_level), 200, 0, True, 30)
@@ -392,7 +412,12 @@ def TOAD_GUI():
     play_button = ttk.Button(p_c_frame, compound='top', image=play_level_icon, text='Play level',
                              state='disabled', command=lambda: spawn_thread(q, play_level))
     play_ai_button = ttk.Button(p_c_frame, compound='top', image=play_ai_level_icon, text='AI Play level',
-                             state='disabled', command=lambda: spawn_thread(q, play_level("robinBaumgarten")))
+                             state='disabled', command=lambda: spawn_thread(q, play_level("AI")))
+    selected_ai = StringVar()
+    ai_options_combobox = ttk.Combobox(p_c_frame, textvariable=selected_ai)
+    ai_options_combobox['values'] = ('robinBaumgarten', 'andySloane', 'doNothing', 'glennHartmann', 'michal', 'random', 'sergeyKarakovskiy', 'sergeyPolikarpov', 'spencerSchumann', 'trondEllingsen')
+    ai_options_combobox['state'] = 'readonly'
+
     # Level Preview image
     image_label = ScrollableImage(settings, image=levelimage, height=271)
 
@@ -434,10 +459,12 @@ def TOAD_GUI():
         if is_loaded.get():
             play_button.state(['!disabled'])
             play_ai_button.state(['!disabled'])
+            ai_options_combobox.state(['!disabled'])
             image_label.change_image(level_obj.image)
         else:
             play_button.state(['disabled'])
             play_ai_button.state(['disabled'])
+            ai_options_combobox.state(['disabled'])
         toggle_editmode(t1, t2, t3)
         return
 
@@ -485,6 +512,7 @@ def TOAD_GUI():
     play_button.grid(column=1, row=0, sticky=(N, S, E, W), padx=5, pady=5)
     play_ai_button.grid(column=2, row=0, sticky=(N, S, E, W), padx=5, pady=5)
     controls_frame.grid(column=3, row=0, sticky=(N, S, E, W), padx=5, pady=5)
+    ai_options_combobox.grid(column=2, row=1, sticky=(N, S, E, W), padx=5, pady=5)
 
     # On controls_frame
     contr_a.grid(column=0, row=0, sticky=(N, S, E), padx=1, pady=1)

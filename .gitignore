@@ -177,3 +177,5 @@ cython_debug/
 .idea/**/dbnavigator.xml
 
 **/output/
+markovjuniorpy/src/environment.txt
+*.class

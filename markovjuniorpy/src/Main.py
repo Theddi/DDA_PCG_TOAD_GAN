@@ -15,8 +15,8 @@ def updateWindow(context):
 def updateOutput(context):
     env = context.applyGrammar()
     #print(env)
-    dp.save_as_png(env)
-    dp.save_as_txt(env)
+    dp.save_as_txt(env, "../output/output")
+    dp.save_as_png(env, "../output/output")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Execute a markovjunior grammar')

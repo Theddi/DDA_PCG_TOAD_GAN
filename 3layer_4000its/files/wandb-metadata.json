@@ -1,0 +1,64 @@
+{
+    "os": "Windows-10-10.0.22621-SP0",
+    "python": "3.10.11",
+    "heartbeatAt": "2023-05-05T07:53:11.950656",
+    "startedAt": "2023-05-05T07:53:11.828013",
+    "docker": null,
+    "cuda": null,
+    "args": [
+        "--input-dir",
+        "input",
+        "--input-name",
+        "lvl_1-1.txt",
+        "--num_layer",
+        "3",
+        "--alpha",
+        "100",
+        "--niter",
+        "4000",
+        "--nfc",
+        "64",
+        "--not_cuda"
+    ],
+    "state": "running",
+    "program": "C:\\Studium\\Bachelorarbeit_save\\DDA_PCG_TOAD_GAN\\TOAD-GAN\\main.py",
+    "codePath": "TOAD-GAN\\main.py",
+    "git": {
+        "remote": "git@github.com:Theddi/DDA_PCG_TOAD_GAN.git",
+        "commit": "ae15313fb0c0aa03bea48b181c708ce8beca7faf"
+    },
+    "email": "dominic.ludorff@stud.uni-hannover.de",
+    "root": "C:/Studium/Bachelorarbeit_save/DDA_PCG_TOAD_GAN",
+    "host": "Dominic-PC",
+    "username": "Dominic",
+    "executable": "C:\\Users\\Dominic\\anaconda3\\envs\\DDA_PCG_TOAD_GAN\\python.exe",
+    "cpu_count": 8,
+    "cpu_count_logical": 16,
+    "cpu_freq": {
+        "current": 3801.0,
+        "min": 0.0,
+        "max": 3801.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 3801.0,
+            "min": 0.0,
+            "max": 3801.0
+        }
+    ],
+    "disk": {
+        "total": 465.0062828063965,
+        "used": 334.55127334594727
+    },
+    "gpu": "NVIDIA GeForce RTX 3080",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA GeForce RTX 3080",
+            "memory_total": 12884901888
+        }
+    ],
+    "memory": {
+        "total": 31.92926025390625
+    }
+}

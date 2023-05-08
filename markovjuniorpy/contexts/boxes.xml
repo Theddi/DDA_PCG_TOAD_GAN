@@ -1,0 +1,20 @@
+<context seed="11" shuffle_matches="0">
+    <environment path="../contexts/boxes_env.txt" />
+    <alphabet>
+        <symbol pattern="*G*/GgG/*G*" />
+        <symbol pattern="*Y*/YgY/*Y*" />
+        <canvas colors="U" />
+    </alphabet>
+    <grammar>
+        <markov>
+            <sequence>
+                <one>
+                    <rule in="UUU/UUU/UUU" out="*P*/PbP/*P*" />
+                </one>
+                <one>
+                    <rule in="UUU/UUU/UUU" out="*Y*/YgY/*Y*" />
+                </one>
+            </sequence>
+        </markov>
+    </grammar>
+</context>

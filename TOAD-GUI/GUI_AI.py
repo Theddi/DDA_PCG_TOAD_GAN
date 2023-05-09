@@ -519,7 +519,7 @@ def TOAD_GUI(marioversion="base"):
             ai_options_combobox.current(0)
 
     new_ai_checkbutton = ttk.Checkbutton(p_c_frame,
-                    text='New AI',
+                    text='Use new AI',
                     command=ai_switch,
                     variable=new_ai)
 

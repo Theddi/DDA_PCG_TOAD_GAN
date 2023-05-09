@@ -356,11 +356,14 @@ def TOAD_GUI(marioversion="base"):
         use_gen.set(False)
         # Py4j Java bridge uses Mario AI Framework
         gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH_NEW, die_on_exit=True, redirect_stdout=sys.stdout, redirect_stderr=sys.stderr)
-        game = gateway.jvm.engine.core.MarioGame()
+        if new_ai.get():
+            game = gateway.jvm.mff.agents.common.AgentMarioGame()
+        else:
+            game = gateway.jvm.engine.core.MarioGame()
         try:
             agent = gateway.jvm.agents.human.Agent()
-            if agent_sel != "human":
-                ai = ai_options_combobox.get()
+            ai = ai_options_combobox.get()
+            if agent_sel != "human" and not new_ai.get():
                 if ai == "andySloane":
                     agent = gateway.jvm.agents.andySloane.Agent()
                 if ai == "doNothing":
@@ -381,7 +384,31 @@ def TOAD_GUI(marioversion="base"):
                     agent = gateway.jvm.agents.trondEllingsen.Agent()
                 if ai == "robinBaumgarten" or ai == "":
                     agent = gateway.jvm.agents.robinBaumgarten.Agent()
-
+            elif agent_sel != "human" and new_ai.get():
+                if ai == "astarDistanceMetric":
+                    agent = gateway.jvm.mff.agents.astarDistanceMetric.Agent()
+                if ai == "astarFast":
+                    agent = gateway.jvm.mff.agents.astarFast.Agent()
+                if ai == "astarGrid":
+                    agent = gateway.jvm.mff.agents.astarGrid.Agent()
+                if ai == "astarJump":
+                    agent = gateway.jvm.mff.agents.astarJump.Agent()
+                if ai == "astarPlanning":
+                    agent = gateway.jvm.mff.agents.astarPlanning.Agent()
+                if ai == "astarPlanningDynamic":
+                    agent = gateway.jvm.mff.agents.astarPlanningDynamic.Agent()
+                if ai == "astarWaypoints":
+                    agent = gateway.jvm.mff.agents.astarWaypoints.Agent()
+                if ai == "astarWindow":
+                    agent = gateway.jvm.mff.agents.astarWindow.Agent()
+                if ai == "robinBaumgartenSlim":
+                    agent = gateway.jvm.mff.agents.robinBaumgartenSlim.Agent()
+                if ai == "robinBaumgartenSlimImproved":
+                    agent = gateway.jvm.mff.agents.robinBaumgartenSlimImproved.Agent()
+                if ai == "robinBaumgartenSlimWindowAdvance":
+                    agent = gateway.jvm.mff.agents.robinBaumgartenSlimWindowAdvance.Agent()
+                if ai == "astar" or ai == "":
+                    agent = gateway.jvm.mff.agents.astar.Agent()
             while True:
                 result = game.runGame(agent, ''.join(level_obj.ascii_level), 180, 0, True, 30, 2.0)
                 perc = int(result.getCompletionPercentage() * 100)
@@ -471,8 +498,30 @@ def TOAD_GUI(marioversion="base"):
                                     state='disabled', command=lambda: spawn_thread(q, play_level("AI")))
     selected_ai = StringVar()
     ai_options_combobox = ttk.Combobox(p_c_frame, textvariable=selected_ai)
-    ai_options_combobox['values'] = ('robinBaumgarten', 'andySloane', 'doNothing', 'glennHartmann', 'michal', 'random', 'sergeyKarakovskiy', 'sergeyPolikarpov', 'spencerSchumann', 'trondEllingsen')
+    ai_options_combobox['values'] = (
+        'robinBaumgarten', 'andySloane', 'doNothing', 'glennHartmann', 'michal', 'random', 'sergeyKarakovskiy',
+        'sergeyPolikarpov', 'spencerSchumann', 'trondEllingsen')
+    ai_options_combobox.current(0)
     ai_options_combobox['state'] = 'readonly'
+
+    new_ai = BooleanVar()
+    def ai_switch():
+        if new_ai.get():
+            ai_options_combobox['values'] = (
+            'astar', 'astarDistanceMetric', 'astarFast', 'astarGrid', 'astarJump', 'astarPlanning',
+            'astarPlanningDynamic', 'astarWaypoints', 'astarWindow', 'robinBaumgartenSlim', 'robinBaumgartenSlimImproved',
+            'robinBaumgartenSlimWindowAdvance')
+            ai_options_combobox.current(2)
+        else:
+            ai_options_combobox['values'] = (
+            'robinBaumgarten', 'andySloane', 'doNothing', 'glennHartmann', 'michal', 'random', 'sergeyKarakovskiy',
+            'sergeyPolikarpov', 'spencerSchumann', 'trondEllingsen')
+            ai_options_combobox.current(0)
+
+    new_ai_checkbutton = ttk.Checkbutton(p_c_frame,
+                    text='New AI?',
+                    command=ai_switch,
+                    variable=new_ai)
 
     # Level Preview image
     image_label = ScrollableImage(settings, image=levelimage, height=271)
@@ -515,12 +564,10 @@ def TOAD_GUI(marioversion="base"):
         if is_loaded.get():
             play_button.state(['!disabled'])
             play_ai_button.state(['!disabled'])
-            ai_options_combobox.state(['!disabled'])
             image_label.change_image(level_obj.image)
         else:
             play_button.state(['disabled'])
             play_ai_button.state(['disabled'])
-            ai_options_combobox.state(['disabled'])
         toggle_editmode(t1, t2, t3)
         return
 
@@ -568,8 +615,8 @@ def TOAD_GUI(marioversion="base"):
     play_button.grid(column=1, row=0, sticky=(N, S, E, W), padx=5, pady=5)
     play_ai_button.grid(column=2, row=0, sticky=(N, S, E, W), padx=5, pady=5)
     controls_frame.grid(column=3, row=0, sticky=(N, S, E, W), padx=5, pady=5)
-    ai_options_combobox.grid(column=2, row=1, sticky=(N, S, E, W), padx=5, pady=5)
-
+    ai_options_combobox.grid(column=2, row=2, sticky=(N, S, E, W), padx=5, pady=5)
+    new_ai_checkbutton.grid(column=2, row=1, sticky=(N, S, E, W), padx=5, pady=5)
     # On controls_frame
     contr_a.grid(column=0, row=0, sticky=(N, S, E), padx=1, pady=1)
     contr_s.grid(column=0, row=1, sticky=(N, S, E), padx=1, pady=1)

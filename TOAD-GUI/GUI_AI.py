@@ -356,59 +356,62 @@ def TOAD_GUI(marioversion="base"):
         use_gen.set(False)
         # Py4j Java bridge uses Mario AI Framework
         gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH_NEW, die_on_exit=True, redirect_stdout=sys.stdout, redirect_stderr=sys.stderr)
-        if new_ai.get():
+        ai = ai_options_combobox.get()
+        if ai in advanced_ais:
             game = gateway.jvm.mff.agents.common.AgentMarioGame()
         else:
             game = gateway.jvm.engine.core.MarioGame()
         try:
             agent = gateway.jvm.agents.human.Agent()
-            ai = ai_options_combobox.get()
-            if agent_sel != "human" and not new_ai.get():
-                if ai == "andySloane":
-                    agent = gateway.jvm.agents.andySloane.Agent()
-                if ai == "doNothing":
-                    agent = gateway.jvm.agents.doNothing.Agent()
-                if ai == "glennHartmann":
-                    agent = gateway.jvm.agents.glennHartmann.Agent()
-                if ai == "michal":
-                    agent = gateway.jvm.agents.michal.Agent()
-                if ai == "random":
-                    agent = gateway.jvm.agents.random.Agent()
-                if ai == "sergeyKarakovskiy":
-                    agent = gateway.jvm.agents.sergeyKarakovskiy.Agent()
-                if ai == "sergeyPolikarpov":
-                    agent = gateway.jvm.agents.sergeyPolikarpov.Agent()
-                if ai == "spencerSchumann":
-                    agent = gateway.jvm.agents.spencerSchumann.Agent()
-                if ai == "trondEllingsen":
-                    agent = gateway.jvm.agents.trondEllingsen.Agent()
-                if ai == "robinBaumgarten" or ai == "":
+            if agent_sel != "human":
+                if ai in base_ais:
+                    if ai == "andySloane":
+                        agent = gateway.jvm.agents.andySloane.Agent()
+                    if ai == "doNothing":
+                        agent = gateway.jvm.agents.doNothing.Agent()
+                    if ai == "glennHartmann":
+                        agent = gateway.jvm.agents.glennHartmann.Agent()
+                    if ai == "michal":
+                        agent = gateway.jvm.agents.michal.Agent()
+                    if ai == "random":
+                        agent = gateway.jvm.agents.random.Agent()
+                    if ai == "sergeyKarakovskiy":
+                        agent = gateway.jvm.agents.sergeyKarakovskiy.Agent()
+                    if ai == "sergeyPolikarpov":
+                        agent = gateway.jvm.agents.sergeyPolikarpov.Agent()
+                    if ai == "spencerSchumann":
+                        agent = gateway.jvm.agents.spencerSchumann.Agent()
+                    if ai == "trondEllingsen":
+                        agent = gateway.jvm.agents.trondEllingsen.Agent()
+                    if ai == "robinBaumgarten":
+                        agent = gateway.jvm.agents.robinBaumgarten.Agent()
+                elif ai in advanced_ais:
+                    if ai == "astarDistanceMetric":
+                        agent = gateway.jvm.mff.agents.astarDistanceMetric.Agent()
+                    if ai == "astarFast":
+                        agent = gateway.jvm.mff.agents.astarFast.Agent()
+                    if ai == "astarGrid":
+                        agent = gateway.jvm.mff.agents.astarGrid.Agent()
+                    if ai == "astarJump":
+                        agent = gateway.jvm.mff.agents.astarJump.Agent()
+                    if ai == "astarPlanning":
+                        agent = gateway.jvm.mff.agents.astarPlanning.Agent()
+                    if ai == "astarPlanningDynamic":
+                        agent = gateway.jvm.mff.agents.astarPlanningDynamic.Agent()
+                    if ai == "astarWaypoints":
+                        agent = gateway.jvm.mff.agents.astarWaypoints.Agent()
+                    if ai == "astarWindow":
+                        agent = gateway.jvm.mff.agents.astarWindow.Agent()
+                    if ai == "robinBaumgartenSlim":
+                        agent = gateway.jvm.mff.agents.robinBaumgartenSlim.Agent()
+                    if ai == "robinBaumgartenSlimImproved":
+                        agent = gateway.jvm.mff.agents.robinBaumgartenSlimImproved.Agent()
+                    if ai == "robinBaumgartenSlimWindowAdvance":
+                        agent = gateway.jvm.mff.agents.robinBaumgartenSlimWindowAdvance.Agent()
+                    if ai == "astar" or ai == "":
+                        agent = gateway.jvm.mff.agents.astar.Agent()
+                else:
                     agent = gateway.jvm.agents.robinBaumgarten.Agent()
-            elif agent_sel != "human" and new_ai.get():
-                if ai == "astarDistanceMetric":
-                    agent = gateway.jvm.mff.agents.astarDistanceMetric.Agent()
-                if ai == "astarFast":
-                    agent = gateway.jvm.mff.agents.astarFast.Agent()
-                if ai == "astarGrid":
-                    agent = gateway.jvm.mff.agents.astarGrid.Agent()
-                if ai == "astarJump":
-                    agent = gateway.jvm.mff.agents.astarJump.Agent()
-                if ai == "astarPlanning":
-                    agent = gateway.jvm.mff.agents.astarPlanning.Agent()
-                if ai == "astarPlanningDynamic":
-                    agent = gateway.jvm.mff.agents.astarPlanningDynamic.Agent()
-                if ai == "astarWaypoints":
-                    agent = gateway.jvm.mff.agents.astarWaypoints.Agent()
-                if ai == "astarWindow":
-                    agent = gateway.jvm.mff.agents.astarWindow.Agent()
-                if ai == "robinBaumgartenSlim":
-                    agent = gateway.jvm.mff.agents.robinBaumgartenSlim.Agent()
-                if ai == "robinBaumgartenSlimImproved":
-                    agent = gateway.jvm.mff.agents.robinBaumgartenSlimImproved.Agent()
-                if ai == "robinBaumgartenSlimWindowAdvance":
-                    agent = gateway.jvm.mff.agents.robinBaumgartenSlimWindowAdvance.Agent()
-                if ai == "astar" or ai == "":
-                    agent = gateway.jvm.mff.agents.astar.Agent()
             while True:
                 result = game.runGame(agent, ''.join(level_obj.ascii_level), 180, 0, True, 30, 2.0)
                 perc = int(result.getCompletionPercentage() * 100)
@@ -496,33 +499,34 @@ def TOAD_GUI(marioversion="base"):
                                  state='disabled', command=lambda: spawn_thread(q, play_level))
         play_ai_button = ttk.Button(p_c_frame, compound='top', image=play_ai_level_icon, text='AI Play level',
                                     state='disabled', command=lambda: spawn_thread(q, play_level("AI")))
-    selected_ai = StringVar()
-    ai_options_combobox = ttk.Combobox(p_c_frame, textvariable=selected_ai)
-    ai_options_combobox['values'] = (
+
+    base_ais = (
         'robinBaumgarten', 'andySloane', 'doNothing', 'glennHartmann', 'michal', 'random', 'sergeyKarakovskiy',
         'sergeyPolikarpov', 'spencerSchumann', 'trondEllingsen')
-    ai_options_combobox.current(0)
-    ai_options_combobox['state'] = 'readonly'
-
-    new_ai = BooleanVar()
-    def ai_switch():
-        if new_ai.get():
-            ai_options_combobox['values'] = (
+    advanced_ais = (
             'astar', 'astarDistanceMetric', 'astarFast', 'astarGrid', 'astarJump', 'astarPlanning',
             'astarPlanningDynamic', 'astarWaypoints', 'astarWindow', 'robinBaumgartenSlim', 'robinBaumgartenSlimImproved',
             'robinBaumgartenSlimWindowAdvance')
-            ai_options_combobox.current(2)
+    selection_ais = ('astar', 'astarPlanningDynamic', 'robinBaumgarten', 'random', 'doNothing')
+
+    selected_ai = StringVar()
+    ai_options_combobox = ttk.Combobox(p_c_frame, textvariable=selected_ai)
+    ai_options_combobox['values'] = base_ais + advanced_ais
+    ai_options_combobox['state'] = 'readonly'
+    ai_options_combobox.current(0)
+
+    selected_ai = BooleanVar()
+    def ai_switch():
+        if selected_ai.get():
+            ai_options_combobox['values'] = selection_ais
         else:
-            ai_options_combobox['values'] = (
-            'robinBaumgarten', 'andySloane', 'doNothing', 'glennHartmann', 'michal', 'random', 'sergeyKarakovskiy',
-            'sergeyPolikarpov', 'spencerSchumann', 'trondEllingsen')
-            ai_options_combobox.current(0)
+            ai_options_combobox['values'] = base_ais + advanced_ais
+        ai_options_combobox.current(0)
 
-    new_ai_checkbutton = ttk.Checkbutton(p_c_frame,
-                    text='Use new AI',
+    selected_ai_checkbutton = ttk.Checkbutton(p_c_frame,
+                    text='Use selected AI',
                     command=ai_switch,
-                    variable=new_ai)
-
+                    variable=selected_ai)
     # Level Preview image
     image_label = ScrollableImage(settings, image=levelimage, height=271)
 
@@ -616,7 +620,7 @@ def TOAD_GUI(marioversion="base"):
     play_ai_button.grid(column=2, row=0, sticky=(N, S, E, W), padx=5, pady=5)
     controls_frame.grid(column=3, row=0, sticky=(N, S, E, W), padx=5, pady=5)
     ai_options_combobox.grid(column=2, row=2, sticky=(N, S, E, W), padx=5, pady=5)
-    new_ai_checkbutton.grid(column=2, row=1, sticky=(N, S, E, W), padx=5, pady=5)
+    selected_ai_checkbutton.grid(column=2, row=1, sticky=(N, S, E, W), padx=5, pady=5)
     # On controls_frame
     contr_a.grid(column=0, row=0, sticky=(N, S, E), padx=1, pady=1)
     contr_s.grid(column=0, row=1, sticky=(N, S, E), padx=1, pady=1)

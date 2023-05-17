@@ -53,7 +53,7 @@ class LevelObject:
 
 
 # Main GUI code
-def TOAD_GUI(marioversion="base"):
+def TOAD_GUI():
     # Init Window
     root = Tk(className=" TOAD-GUI")
 
@@ -296,59 +296,6 @@ def TOAD_GUI(marioversion="base"):
 
             level_obj.image = img
             image_label.change_image(level_obj.image)
-
-    def play_level(agent_sel="human"):
-        error_msg.set("Playing level...")
-        is_loaded.set(False)
-        remember_use_gen = use_gen.get()
-        use_gen.set(False)
-        # Py4j Java bridge uses Mario AI Framework
-        gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH, die_on_exit=True, redirect_stdout=sys.stdout, redirect_stderr=sys.stderr)
-        game = gateway.jvm.engine.core.MarioGame()
-        try:
-            game.initVisuals(2.0)
-            agent = gateway.jvm.agents.human.Agent()
-            if agent_sel != "human":
-                ai = ai_options_combobox.get()
-                if ai == "andySloane":
-                    agent = gateway.jvm.agents.andySloane.Agent()
-                if ai == "doNothing":
-                    agent = gateway.jvm.agents.doNothing.Agent()
-                if ai == "glennHartmann":
-                    agent = gateway.jvm.agents.glennHartmann.Agent()
-                if ai == "michal":
-                    agent = gateway.jvm.agents.michal.Agent()
-                if ai == "random":
-                    agent = gateway.jvm.agents.random.Agent()
-                if ai == "sergeyKarakovskiy":
-                    agent = gateway.jvm.agents.sergeyKarakovskiy.Agent()
-                if ai == "sergeyPolikarpov":
-                    agent = gateway.jvm.agents.sergeyPolikarpov.Agent()
-                if ai == "spencerSchumann":
-                    agent = gateway.jvm.agents.spencerSchumann.Agent()
-                if ai == "trondEllingsen":
-                    agent = gateway.jvm.agents.trondEllingsen.Agent()
-                if ai == "robinBaumgarten" or ai == "":
-                    agent = gateway.jvm.agents.robinBaumgarten.Agent()
-
-            game.setAgent(agent)
-            while True:
-                result = game.gameLoop(''.join(level_obj.ascii_level), 200, 0, True, 30)
-                perc = int(result.getCompletionPercentage() * 100)
-                error_msg.set("Level Played. Completion Percentage: %d%%" % perc)
-        except Exception:
-            error_msg.set("Level Play was interrupted.")
-            is_loaded.set(True)
-            use_gen.set(remember_use_gen)
-        finally:
-            game.getWindow().dispose()
-            gateway.java_process.kill()
-            gateway.close()
-
-        is_loaded.set(True)
-        use_gen.set(remember_use_gen)  # only set use_gen to True if it was previously
-        return
-
     def play_level_new(agent_sel="human"):
         error_msg.set("Playing level...")
         is_loaded.set(False)
@@ -489,16 +436,10 @@ def TOAD_GUI(marioversion="base"):
 
     # Play and Controls frame
     p_c_frame = ttk.Frame(settings)
-    if marioversion == "new":
-        play_button = ttk.Button(p_c_frame, compound='top', image=play_level_icon, text='Play level',
-                             state='disabled', command=lambda: spawn_thread(q, play_level_new))
-        play_ai_button = ttk.Button(p_c_frame, compound='top', image=play_ai_level_icon, text='AI Play level',
-                             state='disabled', command=lambda: spawn_thread(q, play_level_new("AI")))
-    else:
-        play_button = ttk.Button(p_c_frame, compound='top', image=play_level_icon, text='Play level',
-                                 state='disabled', command=lambda: spawn_thread(q, play_level))
-        play_ai_button = ttk.Button(p_c_frame, compound='top', image=play_ai_level_icon, text='AI Play level',
-                                    state='disabled', command=lambda: spawn_thread(q, play_level("AI")))
+    play_button = ttk.Button(p_c_frame, compound='top', image=play_level_icon, text='Play level',
+                         state='disabled', command=lambda: spawn_thread(q, play_level_new))
+    play_ai_button = ttk.Button(p_c_frame, compound='top', image=play_ai_level_icon, text='AI Play level',
+                         state='disabled', command=lambda: spawn_thread(q, play_level_new("AI")))
 
     base_ais = (
         'robinBaumgarten', 'andySloane', 'doNothing', 'glennHartmann', 'michal', 'random', 'sergeyKarakovskiy',

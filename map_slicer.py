@@ -40,5 +40,5 @@ class Mapslicer:
                 file.writelines(levelSlice)
         return os.path.abspath(outputpath)
 
-slicer = Mapslicer(sys.argv[1])
-print("Sliced files found at: "+slicer.slice_level())
+#slicer = Mapslicer(sys.argv[1])
+#print("Sliced files found at: "+slicer.slice_level())

@@ -179,3 +179,4 @@ cython_debug/
 **/output/
 markovjuniorpy/src/environment.txt
 *.class
+**/tmp/

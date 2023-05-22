@@ -12,17 +12,21 @@ import torch
 import math
 import sys
 
-import map_slicer
-
 from utils.scrollable_image import ScrollableImage
 from utils.tooltip import Tooltip
 from utils.level_utils import read_level_from_file, one_hot_to_ascii_level, place_a_mario_token, ascii_to_one_hot_level
 from utils.level_image_gen import LevelImageGen
 from utils.toad_gan_utils import load_trained_pyramid, generate_sample, TOADGAN_obj
 
+import map_slicer
+from filelock import FileLock
+
 # Path to the AI Framework jar for Playing levels
 MARIO_AI_PATH = os.path.abspath(os.path.join(os.path.curdir, "Mario-AI-Framework/mario-1.0-SNAPSHOT.jar"))
 MARIO_AI_PATH_NEW = os.path.abspath(os.path.join(os.path.curdir, "Mario-AI-Framework/Mario-AI-FrameworkImproved.jar"))
+
+# Path for game results
+GAME_RESULT_PATH = os.path.abspath(os.path.join(os.path.curdir, "tmp/results.txt"))
 
 # Check if windows user
 if platform.system() == "Windows":
@@ -303,7 +307,7 @@ def TOAD_GUI():
 
             level_obj.image = img
             image_label.change_image(level_obj.image)
-    def play_level(ai_select="Human", loop=True, playtime=30, manageGateway=False):
+    def play_level(ai_select="Human", loop=False, playtime=30):
         error_msg.set("Playing level...")
         is_loaded.set(False)
         remember_use_gen = use_gen.get()
@@ -375,10 +379,16 @@ def TOAD_GUI():
             oneLoop = True
             while loop or oneLoop:
                 result = game.runGame(agent, ''.join(level_obj.ascii_level), playtime, 0, True, 30, 2.0)
+                gateway.java_process.kill()
                 perc = int(result.getCompletionPercentage() * 100)
+                with FileLock(GAME_RESULT_PATH+".lock"):
+                    with open(GAME_RESULT_PATH, 'a') as file:
+                        file.write(ai + ", " + str(perc) + "\n")
+                        # Wanted to include remaining time ' str(result.getRemainingTime()) ',
+                        # but neither does it calculate old agents correctly nor does it even work with new agents
+
                 error_msg.set("Level Played. Completion Percentage: %d%%" % perc)
                 oneLoop = False
-                gateway.java_process.kill()
 
         except Exception:
             error_msg.set("Level Play was interrupted.")
@@ -392,9 +402,24 @@ def TOAD_GUI():
         use_gen.set(remember_use_gen)  # only set use_gen to True if it was previously
         return
 
-    def ai_iterate_level():
+    def ai_iterate_level(clear=True):
+        standard_agent_time = 10
+        if clear and os.path.isfile(GAME_RESULT_PATH):
+            os.remove(GAME_RESULT_PATH)
         for ai in selection_ais:
-            spawn_thread(q, play_level, ai, False)
+            spawn_thread(q, play_level, ai, False, 5 if ai == "doNothing" else standard_agent_time)
+        # TODO change time wait to thread wait
+        time.sleep(standard_agent_time + standard_agent_time * .5)
+        results = []
+        with FileLock(GAME_RESULT_PATH + ".lock"):
+            with open(GAME_RESULT_PATH, 'r') as file:
+                for line in file:
+                    res = line.replace('\n', '').split(', ')
+                    if len(res) > 1:
+                        results.append(res)
+        for res in results:
+            print(res)
+
     # ---------------------------------------- Layout ----------------------------------------
 
     settings = ttk.Frame(root, padding=(15, 15, 15, 15), width=1000, height=1000)  # Main Frame
@@ -457,13 +482,13 @@ def TOAD_GUI():
     # Play and Controls frame
     p_c_frame = ttk.Frame(settings)
     play_button = ttk.Button(p_c_frame, compound='top', image=play_level_icon, text='Play level',
-                         state='disabled', command=lambda: spawn_thread(q, play_level, "Human", True, 180, True))
+                         state='disabled', command=lambda: spawn_thread(q, play_level, "Human", False, 180))
     play_ai_button = ttk.Button(p_c_frame, compound='top', image=play_ai_level_icon, text='AI Play level',
-                         state='disabled', command=lambda: spawn_thread(q, play_level, ai_options_combobox.get(), True, 30, True))
+                         state='disabled', command=lambda: spawn_thread(q, play_level, ai_options_combobox.get(), False, 30))
 
     difficulty_frame = ttk.Frame(settings)
     iterate_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon, text='Iterate level with ai',
-                         state='disabled', command=lambda: ai_iterate_level())
+                         state='disabled', command=lambda: spawn_thread(q, ai_iterate_level))
 
     selected_ai = StringVar()
     ai_options_combobox = ttk.Combobox(p_c_frame, textvariable=selected_ai)

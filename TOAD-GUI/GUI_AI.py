@@ -82,6 +82,7 @@ def TOAD_GUI():
         thread = ThreadedClient(que, fcn, *args)
         thread.start()
         periodic_call(thread)
+        return thread
 
     def periodic_call(thread):
         if thread.is_alive():
@@ -141,6 +142,9 @@ def TOAD_GUI():
     def load_level():
         fname = fd.askopenfilename(title='Load Level', initialdir=os.path.join(os.curdir, 'levels'),
                                    filetypes=[("level .txt files", "*.txt")])
+        load_level_by_path(fname)
+
+    def load_level_by_path(fname):
         if len(fname) == 0:
             return  # loading was cancelled
         try:
@@ -184,7 +188,6 @@ def TOAD_GUI():
         except Exception:
             error_msg.set("No level file selected.")
         return
-
     def load_generator():
         fname = fd.askdirectory(title='Load Generator Directory', initialdir=os.path.join(os.curdir, 'generators'))
 
@@ -383,9 +386,7 @@ def TOAD_GUI():
                 perc = int(result.getCompletionPercentage() * 100)
                 with FileLock(GAME_RESULT_PATH+".lock"):
                     with open(GAME_RESULT_PATH, 'a') as file:
-                        file.write(ai + ", " + str(perc) + "\n")
-                        # Wanted to include remaining time ' str(result.getRemainingTime()) ',
-                        # but neither does it calculate old agents correctly nor does it even work with new agents
+                        file.write(ai + ", " + str(perc) + ", " + str(result.getRemainingTime()/1000) + "\n")
 
                 error_msg.set("Level Played. Completion Percentage: %d%%" % perc)
                 oneLoop = False
@@ -403,13 +404,14 @@ def TOAD_GUI():
         return
 
     def ai_iterate_level(clear=True):
-        standard_agent_time = 10
+        threads = []
+        standard_agent_time = 20
         if clear and os.path.isfile(GAME_RESULT_PATH):
             os.remove(GAME_RESULT_PATH)
         for ai in selection_ais:
-            spawn_thread(q, play_level, ai, False, 5 if ai == "doNothing" else standard_agent_time)
-        # TODO change time wait to thread wait
-        time.sleep(standard_agent_time + standard_agent_time * .5)
+            threads.append(spawn_thread(q, play_level, ai, False, 5 if ai == "doNothing" else standard_agent_time))
+        for thread in threads:
+            thread.join()
         results = []
         with FileLock(GAME_RESULT_PATH + ".lock"):
             with open(GAME_RESULT_PATH, 'r') as file:

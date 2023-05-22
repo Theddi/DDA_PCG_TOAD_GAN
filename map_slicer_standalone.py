@@ -12,6 +12,7 @@ class Mapslicer:
         if self.width % 2 != 0:
             raise Exception("NoHalvableWidth")
         self.read_level()
+
     def read_level(self):
         with open(self.level, 'r') as file:
             for line in file:

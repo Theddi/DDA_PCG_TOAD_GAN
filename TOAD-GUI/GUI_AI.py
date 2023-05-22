@@ -18,7 +18,6 @@ from utils.level_utils import read_level_from_file, one_hot_to_ascii_level, plac
 from utils.level_image_gen import LevelImageGen
 from utils.toad_gan_utils import load_trained_pyramid, generate_sample, TOADGAN_obj
 
-import map_slicer
 from filelock import FileLock
 import shutil
 

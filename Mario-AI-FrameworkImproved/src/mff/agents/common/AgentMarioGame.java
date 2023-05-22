@@ -1,8 +1,6 @@
 package mff.agents.common;
 
-import engine.core.MarioForwardModel;
-import engine.core.MarioRender;
-import engine.core.MarioWorld;
+import engine.core.*;
 import engine.helper.GameStatus;
 import engine.helper.MarioActions;
 import mff.forwardmodel.common.Converter;
@@ -11,6 +9,7 @@ import mff.forwardmodel.slim.core.MarioForwardModelSlim;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.VolatileImage;
+import java.util.ArrayList;
 
 public class AgentMarioGame {
     public static final long maxTime = 33;
@@ -35,11 +34,11 @@ public class AgentMarioGame {
         this.agent = agent;
     }
 
-    public void runGame(IMarioAgentMFF agent, String level, int timer, int marioState, boolean visuals) {
-        runGame(agent, level, timer, marioState, visuals, visuals ? 30 : 0, 2);
+    public MarioResult runGame(IMarioAgentMFF agent, String level, int timer, int marioState, boolean visuals) {
+        return runGame(agent, level, timer, marioState, visuals, visuals ? 30 : 0, 2);
     }
 
-    public void runGame(IMarioAgentMFF agent, String level, int timer, int marioState, boolean visuals, int fps, float scale) {
+    public MarioResult runGame(IMarioAgentMFF agent, String level, int timer, int marioState, boolean visuals, int fps, float scale) {
         JFrame window = null;
         if (visuals) {
             window = new JFrame("Mario AI Framework");
@@ -52,12 +51,13 @@ public class AgentMarioGame {
             window.setVisible(true);
         }
         this.setAgent(agent);
-        gameLoop(level, timer, marioState, visuals, fps);
+        MarioResult result = gameLoop(level, timer, marioState, visuals, fps);
         if (visuals)
             window.dispose();
+        return result;
     }
 
-    private void gameLoop(String level, int timer, int marioState, boolean visual, int fps) {
+    private MarioResult gameLoop(String level, int timer, int marioState, boolean visual, int fps) {
         MarioWorld world = new MarioWorld(null);
         world.visuals = visual;
         world.initializeLevel(level, 1000 * timer);
@@ -84,6 +84,9 @@ public class AgentMarioGame {
         MarioForwardModelSlim slimModel = Converter.originalToSlim(new MarioForwardModel(world.clone()), 27);
         this.agent.initialize(slimModel);
 
+        ArrayList<MarioEvent> gameEvents = new ArrayList<MarioEvent>();
+        ArrayList<MarioAgentEvent> agentEvents = new ArrayList<MarioAgentEvent>();
+
         while (world.gameStatus == GameStatus.RUNNING) {
             if (!this.pause) {
 
@@ -100,6 +103,15 @@ public class AgentMarioGame {
 
                 // update world
                 world.update(actions);
+                gameEvents.addAll(world.lastFrameEvents);
+                agentEvents.add(new MarioAgentEvent(
+                        actions,
+                        world.mario.x,
+                        world.mario.y,
+                        (world.mario.isLarge ? 1 : 0) + (world.mario.isFire ? 1 : 0),
+                        world.mario.onGround,
+                        world.currentTick
+                ));
                 // keep forward model up with world
                 slimModel.advance(actions);
             }
@@ -119,6 +131,7 @@ public class AgentMarioGame {
                 }
             }
         }
+        return new MarioResult(world, gameEvents, agentEvents);
         //System.out.println(world.gameStatus);
     }
 }

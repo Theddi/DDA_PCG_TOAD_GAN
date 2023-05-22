@@ -20,13 +20,22 @@ from utils.toad_gan_utils import load_trained_pyramid, generate_sample, TOADGAN_
 
 import map_slicer
 from filelock import FileLock
+import shutil
 
+# PATHS
+CURDIR = os.path.abspath(os.path.curdir)
 # Path to the AI Framework jar for Playing levels
-MARIO_AI_PATH = os.path.abspath(os.path.join(os.path.curdir, "Mario-AI-Framework/mario-1.0-SNAPSHOT.jar"))
-MARIO_AI_PATH_NEW = os.path.abspath(os.path.join(os.path.curdir, "Mario-AI-Framework/Mario-AI-FrameworkImproved.jar"))
-
+MARIO_AI_PATH = os.path.join(CURDIR, "Mario-AI-Framework/mario-1.0-SNAPSHOT.jar")
+MARIO_AI_PATH_NEW = os.path.join(CURDIR, "Mario-AI-Framework/Mario-AI-FrameworkImproved.jar")
+# Output folder
+OUT = os.path.join(CURDIR, "tmp/")
+pathExist = os.path.exists(OUT)
+if not pathExist:
+    os.makedirs(OUT)
 # Path for game results
-GAME_RESULT_PATH = os.path.abspath(os.path.join(os.path.curdir, "tmp/results.txt"))
+GAME_RESULT_PATH = os.path.join(OUT, "results.txt")
+# Lock file extension
+LOCK_EXT = ".lock"
 
 # Check if windows user
 if platform.system() == "Windows":
@@ -49,13 +58,14 @@ def on_validate(in_str, act_type):
 
 # Object holding important data about the current level
 class LevelObject:
-    def __init__(self, ascii_level, oh_level, image, tokens, scales, noises):
+    def __init__(self, ascii_level, oh_level, image, tokens, scales, noises, name=""):
         self.ascii_level = ascii_level
         self.oh_level = oh_level  # one-hot encoded
         self.image = image
         self.tokens = tokens
         self.scales = scales
         self.noises = noises
+        self.name = name
 
 
 # Main GUI code
@@ -155,6 +165,7 @@ def TOAD_GUI():
             if fname[-3:] == "txt":
                 load_string_gen.set('Path: ' + fname)
                 folder, lname = os.path.split(fname)
+                level_obj.name = lname
 
                 # Load level
                 lev, tok = read_level_from_file(folder, lname)
@@ -382,11 +393,12 @@ def TOAD_GUI():
             oneLoop = True
             while loop or oneLoop:
                 result = game.runGame(agent, ''.join(level_obj.ascii_level), playtime, 0, True, 30, 2.0)
+                print(level_obj.oh_level)
                 gateway.java_process.kill()
                 perc = int(result.getCompletionPercentage() * 100)
-                with FileLock(GAME_RESULT_PATH+".lock"):
+                with FileLock(GAME_RESULT_PATH+LOCK_EXT):
                     with open(GAME_RESULT_PATH, 'a') as file:
-                        file.write(ai + ", " + str(perc) + ", " + str(result.getRemainingTime()/1000) + "\n")
+                        file.write(level_obj.name + ", " + ai + ", " + str(perc) + ", " + str(result.getRemainingTime()/1000) + "\n")
 
                 error_msg.set("Level Played. Completion Percentage: %d%%" % perc)
                 oneLoop = False
@@ -403,17 +415,17 @@ def TOAD_GUI():
         use_gen.set(remember_use_gen)  # only set use_gen to True if it was previously
         return
 
-    def ai_iterate_level(clear=True):
+    def ai_iterate_level(slice=True, clear=True):
         threads = []
-        standard_agent_time = 20
+        standard_agent_time = 10
         if clear and os.path.isfile(GAME_RESULT_PATH):
-            os.remove(GAME_RESULT_PATH)
+            shutil.rmtree('/folder_name', ignore_errors=True)
         for ai in selection_ais:
-            threads.append(spawn_thread(q, play_level, ai, False, 5 if ai == "doNothing" else standard_agent_time))
+            threads.append(spawn_thread(q, play_level, ai, False, 2 if ai == "doNothing" else standard_agent_time))
         for thread in threads:
             thread.join()
         results = []
-        with FileLock(GAME_RESULT_PATH + ".lock"):
+        with FileLock(GAME_RESULT_PATH + LOCK_EXT):
             with open(GAME_RESULT_PATH, 'r') as file:
                 for line in file:
                     res = line.replace('\n', '').split(', ')

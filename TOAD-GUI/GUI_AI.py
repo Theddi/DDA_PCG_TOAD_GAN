@@ -54,7 +54,8 @@ def on_validate(in_str, act_type):
             return False
     return True
 
-
+genCounter = 0
+genName = ""
 # Object holding important data about the current level
 class LevelObject:
     def __init__(self, ascii_level, oh_level, image, tokens, scales, noises, name=""):
@@ -66,6 +67,37 @@ class LevelObject:
         self.noises = noises
         self.name = name
 
+class Mapslicer:
+
+    def __init__(self, level_obj, width=28):
+        self.name = level_obj.name
+        self.level_mat = level_obj.ascii_level
+        self.width = width
+        if self.width % 2 != 0:
+            raise Exception("NoHalvableWidth")
+    '''
+    slice_level slices the level input read by read_level into slices of size width
+    Double the amount of slices will be created to better cover the whole map
+    Therefore the level is iterated in width/2 steps with width size
+    returns the path to the sliced files
+    '''
+    def slice_level(self):
+        levelWidth = len(self.level_mat[0])
+        levelHeight = len(self.level_mat)
+        stepSize = int(self.width / 2)
+
+        outputpath = OUT+self.name+"_SLICED/"
+        pathExist = os.path.exists(outputpath)
+        if not pathExist:
+            os.makedirs(outputpath)
+        for i in range(0, levelWidth - self.width, stepSize):
+            levelSlice = []
+            for h in range(levelHeight):
+                levelSlice.append("\n"+self.level_mat[h][i:i+self.width] if h != 0 else ""+self.level_mat[h][i:i+self.width])
+            sliceFileName = self.name+"_slice"+str(int(i/stepSize))+".txt"
+            with open(outputpath+sliceFileName, 'w') as file:
+                file.writelines(levelSlice)
+        return os.path.abspath(outputpath)
 
 # Main GUI code
 def TOAD_GUI():
@@ -164,7 +196,7 @@ def TOAD_GUI():
             if fname[-3:] == "txt":
                 load_string_gen.set('Path: ' + fname)
                 folder, lname = os.path.split(fname)
-                level_obj.name = lname
+                level_obj.name = lname.replace(".txt", "")
 
                 # Load level
                 lev, tok = read_level_from_file(folder, lname)
@@ -209,6 +241,8 @@ def TOAD_GUI():
             is_loaded.set(False)
             load_string_gen.set('Path: ' + fname)
             folder = fname
+            global genName
+            genName = os.path.split(fname)[1]
 
             # Load TOAD-GAN
             loadgan, msg = load_trained_pyramid(folder)
@@ -249,6 +283,8 @@ def TOAD_GUI():
         return
 
     def generate():
+        global genCounter
+        genCounter += 1
         if toadgan_obj.Gs is None:
             error_msg.set("Generator did not load correctly. Are all necessary files in the folder?")
         else:
@@ -259,6 +295,7 @@ def TOAD_GUI():
             sc_l = level_l.get() / toadgan_obj.reals[-1].shape[-1]
 
             # Generate level
+            level_obj.name = genName + "_C" + str(genCounter)
             level, scales, noises = generate_sample(toadgan_obj.Gs, toadgan_obj.Zs, toadgan_obj.reals,
                                                     toadgan_obj.NoiseAmp, toadgan_obj.num_layers,
                                                     toadgan_obj.token_list,
@@ -320,13 +357,14 @@ def TOAD_GUI():
 
             level_obj.image = img
             image_label.change_image(level_obj.image)
-    def play_level(ai_select="Human", loop=False, playtime=30):
+    def play_level(ai_select="Human", loop=False, playtime=30, visuals=True, multicall=False):
         error_msg.set("Playing level...")
-        is_loaded.set(False)
+        if not multicall:
+            is_loaded.set(False)
         remember_use_gen = use_gen.get()
         use_gen.set(False)
         ai = ai_select
-        print("Level played by: " + ai)
+        #print("Level [" + level_obj.name + "] played by: " + ai)
 
         # Py4j Java bridge uses Mario AI Framework
         gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH_NEW, die_on_exit=True,
@@ -391,8 +429,7 @@ def TOAD_GUI():
                 agent = gateway.jvm.agents.human.Agent()
             oneLoop = True
             while loop or oneLoop:
-                result = game.runGame(agent, ''.join(level_obj.ascii_level), playtime, 0, True, 30, 2.0)
-                print(level_obj.oh_level)
+                result = game.runGame(agent, ''.join(level_obj.ascii_level), playtime, 0, visuals, 30, 2.0)
                 gateway.java_process.kill()
                 perc = int(result.getCompletionPercentage() * 100)
                 with FileLock(GAME_RESULT_PATH+LOCK_EXT):
@@ -404,25 +441,43 @@ def TOAD_GUI():
 
         except Exception:
             error_msg.set("Level Play was interrupted.")
-            is_loaded.set(True)
+            if not multicall:
+                is_loaded.set(True)
             use_gen.set(remember_use_gen)
         finally:
             gateway.java_process.kill()
             gateway.close()
 
-        is_loaded.set(True)
+        if not multicall:
+            is_loaded.set(True)
         use_gen.set(remember_use_gen)  # only set use_gen to True if it was previously
         return
 
     def ai_iterate_level(slice=True, clear=True):
+        is_loaded.set(False)
         threads = []
         standard_agent_time = 10
         if clear and os.path.isfile(GAME_RESULT_PATH):
-            shutil.rmtree('/folder_name', ignore_errors=True)
-        for ai in selection_ais:
-            threads.append(spawn_thread(q, play_level, ai, False, 2 if ai == "doNothing" else standard_agent_time))
-        for thread in threads:
-            thread.join()
+            shutil.rmtree(OUT, ignore_errors=True)
+
+        # slicing and execution per mapslice
+        if slice:
+            slicer = Mapslicer(level_obj)
+            levelsPath = slicer.slice_level()
+            for level in os.listdir(levelsPath):
+                load_level_by_path(os.path.join(levelsPath, level))
+                for ai in selection_ais:
+                    threads.append(
+                        spawn_thread(q, play_level, ai, False, 2 if ai == "doNothing" else standard_agent_time, False, True))
+                for thread in threads:
+                    thread.join()
+
+        else:
+            for ai in selection_ais:
+                threads.append(spawn_thread(q, play_level, ai, False, 2 if ai == "doNothing" else standard_agent_time, True, True))
+            for thread in threads:
+                thread.join()
+
         results = []
         with FileLock(GAME_RESULT_PATH + LOCK_EXT):
             with open(GAME_RESULT_PATH, 'r') as file:
@@ -432,6 +487,8 @@ def TOAD_GUI():
                         results.append(res)
         for res in results:
             print(res)
+
+        is_loaded.set(True)
 
     # ---------------------------------------- Layout ----------------------------------------
 

@@ -384,13 +384,18 @@ def TOAD_GUI():
 
             level_obj.image = img
             image_label.change_image(level_obj.image)
+
     def play_level(ai_select="Human", loop=False, playtime=30, visuals=True, multicall=False):
-        error_msg.set("Playing level...")
+        ai = ai_select
         if not multicall:
+            error_msg.set("Playing level...")
             is_loaded.set(False)
+        else:
+            error_msg.set("Iterating: Playing with " + ai)
+
         remember_use_gen = use_gen.get()
         use_gen.set(False)
-        ai = ai_select
+
         #print("Level [" + level_obj.name + "] played by: " + ai)
 
         # Py4j Java bridge uses Mario AI Framework
@@ -461,15 +466,19 @@ def TOAD_GUI():
                 perc = int(result.getCompletionPercentage() * 100)
                 with FileLock(GAME_RESULT_PATH+LOCK_EXT):
                     with open(GAME_RESULT_PATH, 'a') as file:
-                        file.write(level_obj.name + ", " + ai + ", " + str(perc) + ", " + str(result.getRemainingTime()/1000) + "\n")
-
-                error_msg.set("Level Played. Completion Percentage: %d%%" % perc)
+                        file.write(", ".join([level_obj.name, ai, str(perc), str(result.getRemainingTime()/1000), str(playtime)]) + "\n")
+                if not multicall:
+                    error_msg.set("Level Played. Completion Percentage: %d%%" % perc)
+                else:
+                    error_msg.set("Iterating: " + ai + " completion percentage: %d%%" % perc)
                 oneLoop = False
 
         except Exception:
-            error_msg.set("Level Play was interrupted.")
             if not multicall:
+                error_msg.set("Level Play was interrupted.")
                 is_loaded.set(True)
+            else:
+                error_msg.set("Iterating: Level Play was interrupted.")
             use_gen.set(remember_use_gen)
         finally:
             gateway.java_process.kill()
@@ -484,6 +493,7 @@ def TOAD_GUI():
         is_loaded.set(False)
         threads = []
         standard_agent_time = 10
+        error_msg.set("Iterating...")
         if clear and os.path.isfile(GAME_RESULT_PATH):
             shutil.rmtree(OUT, ignore_errors=True)
 
@@ -522,9 +532,13 @@ def TOAD_GUI():
                     res = line.replace('\n', '').split(', ')
                     if len(res) > 1:
                         results.append(res)
-        #for res in results:
-        #    print(res)
 
+        error_msg.set("Iterating: Results collected")
+        ''' Result form: file name, agent, completion percentage, remaining time, total time'''
+        for res in results:
+            print(res)
+
+        error_msg.set("Iterating Finished")
         is_loaded.set(True)
 
     # ---------------------------------------- Layout ----------------------------------------
@@ -785,7 +799,7 @@ def TOAD_GUI():
             'astar', 'astarDistanceMetric', 'astarFast', 'astarGrid', 'astarJump', 'astarPlanning',
             'astarPlanningDynamic', 'astarWaypoints', 'astarWindow', 'robinBaumgartenSlim', 'robinBaumgartenSlimImproved',
             'robinBaumgartenSlimWindowAdvance')
-    selection_ais = ('astar', 'astarPlanningDynamic', 'robinBaumgarten', 'random', 'doNothing')
+    selection_ais = ('astar', 'astarPlanningDynamic', 'robinBaumgarten', 'random') # insert 'doNothing', if testing on fine granularity
     ai_options_combobox['values'] = base_ais + advanced_ais
     ai_options_combobox['state'] = 'readonly'
     ai_options_combobox.current(0)

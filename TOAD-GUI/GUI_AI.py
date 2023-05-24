@@ -491,6 +491,7 @@ def TOAD_GUI():
 
     def ai_iterate_level(slice=True, clear=True):
         is_loaded.set(False)
+        editmode.set(False)
         threads = []
         standard_agent_time = 10
         error_msg.set("Iterating...")
@@ -599,7 +600,6 @@ def TOAD_GUI():
         return
 
     use_gen.trace("w", callback=set_button_state)
-
 
     # Play and Controls Notebook
     p_c_tabs = ttk.Notebook(settings)

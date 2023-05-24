@@ -585,7 +585,7 @@ def TOAD_GUI():
                 save_button.state(['!disabled'])
             h_entry.state(['!disabled'])
             l_entry.state(['!disabled'])
-            emode_box.state(['!disabled'])
+            p_c_tabs.tab(2, state="normal")
         else:
             gen_button.state(['disabled'])
             if not is_loaded.get():
@@ -595,7 +595,7 @@ def TOAD_GUI():
                 editmode.set(False)
             h_entry.state(['disabled'])
             l_entry.state(['disabled'])
-            emode_box.state(['disabled'])
+            p_c_tabs.tab(2, state="disabled")
         return
 
     use_gen.trace("w", callback=set_button_state)
@@ -646,7 +646,13 @@ def TOAD_GUI():
                          state='disabled', command=lambda: spawn_thread(q, ai_iterate_level))
 
     edit_tab = ttk.Frame(settings)
-    p_c_tabs.add(edit_tab, text="Edit")
+
+    def on_tab_change(event):
+        tab = event.widget.tab('current')['text']
+        if tab == 'Edit Mode':
+            editmode.set(True)
+
+    p_c_tabs.bind('<<NotebookTabChanged>>', on_tab_change)
     # Level Preview image
     image_label = ScrollableImage(settings, image=levelimage, height=271)
 
@@ -816,14 +822,12 @@ def TOAD_GUI():
 
     # ---------------------------------------- Edit Mode Widgets ----------------------------------------
 
-    # Set Edit mode Checkbox
-    emode_box = ttk.Checkbutton(settings, text="Edit mode", variable=editmode, state='disabled')
-    em_tooltip = Tooltip(emode_box,
+    # Set Edit mode Tab
+    p_c_tabs.add(edit_tab, text="Edit Mode", state='disabled')
+    em_tooltip = Tooltip(edit_tab,
                          text="Right click the image to change a token directly. \n"
                               "Edit mode allows for resampling parts of a generated level.",
                          wraplength=250, bg="white", enabled=True, waittime=100)
-    emode_box.grid(column=1, row=8, columnspan=2, sticky=(N, S, E, W), padx=5, pady=5)
-    settings.rowconfigure(8, weight=1)
 
     # Edit mode frame
     emode_frame = ttk.LabelFrame(edit_tab, text="Edit mode controls", padding=(5, 5, 5, 5))

@@ -66,6 +66,22 @@ class LevelObject:
         self.scales = scales
         self.noises = noises
         self.name = name
+    def save(self, into):
+        into.oh_level = self.oh_level
+        into.ascii_level = self.ascii_level
+        into.name = self.name
+        into.image = self.image
+        into.scales = self.scales
+        into.noises = self.noises
+        into.tokens = self.tokens
+    def restore(self, from_):
+        self.oh_level = from_.oh_level
+        self.ascii_level = from_.ascii_level
+        self.name = from_.name
+        self.image = from_.image
+        self.scales = from_.scales
+        self.noises = from_.noises
+        self.tokens = from_.tokens
 
 class Mapslicer:
 
@@ -159,6 +175,7 @@ def TOAD_GUI():
 
     # Define Variables
     level_obj = LevelObject('-', None, levelimage, ['-'], None, None)
+    level_obj_tmp = LevelObject('-', None, levelimage, ['-'], None, None)
     toadgan_obj = TOADGAN_obj(None, None, None, None, None, None)
 
     level_l = IntVar()
@@ -269,21 +286,28 @@ def TOAD_GUI():
 
         return
 
-    def save_txt():
-        save_name = fd.asksaveasfile(title='Save level (.txt/.png)', initialdir=os.path.join(os.curdir, "levels"),
-                                     mode='w', defaultextension=".txt",
-                                     filetypes=[("txt files", ".txt"), ("png files", ".png")])
-        if save_name is None:
-            return  # saving was cancelled
-        elif save_name.name[-3:] == "txt":
-            text2save = ''.join(level_obj.ascii_level)
-            save_name.write(text2save)
-            save_name.close()
-        elif save_name.name[-3:] == "png":
-            ImgGen.render(level_obj.ascii_level).save(save_name.name)
+    def save_txt(current=False):
+        if not current:
+            save_name = fd.asksaveasfile(title='Save level (.txt/.png)', initialdir=os.path.join(os.curdir, "levels"),
+                                         mode='w', defaultextension=".txt",
+                                         filetypes=[("txt files", ".txt"), ("png files", ".png")])
+            if save_name is None:
+                return  # saving was cancelled
+            elif save_name.name[-3:] == "txt":
+                text2save = ''.join(level_obj.ascii_level)
+                save_name.write(text2save)
+                save_name.close()
+            elif save_name.name[-3:] == "png":
+                ImgGen.render(level_obj.ascii_level).save(save_name.name)
+            else:
+                error_msg.set("Could not save level with this extension. Supported: .txt, .png")
+            return
         else:
-            error_msg.set("Could not save level with this extension. Supported: .txt, .png")
-        return
+            genFilePath = os.path.join(OUT, level_obj.name+".txt")
+            with open(genFilePath, 'w') as save_name:
+                text2save = ''.join(level_obj.ascii_level)
+                save_name.write(text2save)
+            return genFilePath
 
     def generate():
         global genCounter
@@ -465,7 +489,10 @@ def TOAD_GUI():
 
         # slicing and execution per mapslice
         if slice:
-            sourcePath = level_path.get()
+            setGen = False
+            level_obj.save(level_obj_tmp)
+            if use_gen.get():
+                setGen = True
             slicer = Mapslicer(level_obj)
             levelsPath = slicer.slice_level()
             for level in os.listdir(levelsPath):
@@ -475,10 +502,13 @@ def TOAD_GUI():
                         spawn_thread(q, play_level, ai, False, 2 if ai == "doNothing" else standard_agent_time, False, True))
                 for thread in threads:
                     thread.join()
-            if use_gen.get():
-                pass
-            else:
-                load_level_by_path(sourcePath)
+
+            level_obj.restore(level_obj_tmp)
+            redraw_image()
+            level_l.set(len(level_obj.ascii_level[0])-1)
+            level_h.set(len(level_obj.ascii_level))
+            if setGen:
+                use_gen.set(True)
         else:
             for ai in selection_ais:
                 threads.append(spawn_thread(q, play_level, ai, False, 2 if ai == "doNothing" else standard_agent_time, True, True))

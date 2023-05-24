@@ -600,32 +600,53 @@ def TOAD_GUI():
 
     use_gen.trace("w", callback=set_button_state)
 
-    # Play and Controls frame
+
+    # Play and Controls Notebook
+    p_c_tabs = ttk.Notebook(settings)
+
     p_c_frame = ttk.Frame(settings)
+    p_c_tabs.add(p_c_frame, text="Play/Controls")
     play_button = ttk.Button(p_c_frame, compound='top', image=play_level_icon, text='Play level',
                          state='disabled', command=lambda: spawn_thread(q, play_level, "Human", False, 180))
     play_ai_button = ttk.Button(p_c_frame, compound='top', image=play_ai_level_icon, text='AI Play level',
                          state='disabled', command=lambda: spawn_thread(q, play_level, ai_options_combobox.get(), False, 30))
 
-    difficulty_frame = ttk.Frame(settings)
-    iterate_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon, text='Iterate level with ai',
-                         state='disabled', command=lambda: spawn_thread(q, ai_iterate_level))
-
     selected_ai = StringVar()
-    ai_options_combobox = ttk.Combobox(p_c_frame, textvariable=selected_ai)
+    base_ais = (
+        'robinBaumgarten', 'andySloane', 'doNothing', 'glennHartmann', 'michal', 'random', 'sergeyKarakovskiy',
+        'sergeyPolikarpov', 'spencerSchumann', 'trondEllingsen')
+    advanced_ais = (
+        'astar', 'astarDistanceMetric', 'astarFast', 'astarGrid', 'astarJump', 'astarPlanning',
+        'astarPlanningDynamic', 'astarWaypoints', 'astarWindow', 'robinBaumgartenSlim', 'robinBaumgartenSlimImproved',
+        'robinBaumgartenSlimWindowAdvance')
+    selection_ais = (
+    'astar', 'astarPlanningDynamic', 'robinBaumgarten', 'random')  # insert 'doNothing', if testing on fine granularity
 
-    selected_ai = BooleanVar()
+    ai_options_combobox = ttk.Combobox(p_c_frame, textvariable=selected_ai)
+    ai_options_combobox['values'] = base_ais + advanced_ais
+    ai_options_combobox['state'] = 'readonly'
+    ai_options_combobox.current(0)
+
+    use_selected_ai = BooleanVar()
+
     def ai_switch():
-        if selected_ai.get():
+        if use_selected_ai.get():
             ai_options_combobox['values'] = selection_ais
         else:
             ai_options_combobox['values'] = base_ais + advanced_ais
         ai_options_combobox.current(0)
 
-    selected_ai_checkbutton = ttk.Checkbutton(p_c_frame,
-                    text='Use selected AI',
-                    command=ai_switch,
-                    variable=selected_ai)
+    use_selected_ai_checkbutton = ttk.Checkbutton(p_c_frame,
+                                                  text='Use selected AI',
+                                                  command=ai_switch,
+                                                  variable=use_selected_ai)
+    difficulty_frame = ttk.Frame(settings)
+    p_c_tabs.add(difficulty_frame, text="Difficulty Adjustment")
+    iterate_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon, text='Iterate level with ai',
+                         state='disabled', command=lambda: spawn_thread(q, ai_iterate_level))
+
+    edit_tab = ttk.Frame(settings)
+    p_c_tabs.add(edit_tab, text="Edit")
     # Level Preview image
     image_label = ScrollableImage(settings, image=levelimage, height=271)
 
@@ -706,8 +727,7 @@ def TOAD_GUI():
     gen_button.grid(column=1, row=4, sticky=(N, S, E, W), padx=5, pady=5)
     save_button.grid(column=2, row=4, sticky=(N, S, E, W), padx=5, pady=5)
     image_label.grid(column=0, row=6, columnspan=4, sticky=(N, E, W), padx=5, pady=8)
-    p_c_frame.grid(column=1, row=7, columnspan=2, sticky=(N, S, E, W), padx=5, pady=5)
-    difficulty_frame.grid(column=1, row=10, columnspan=2, sticky=(N, S, E, W), padx=5, pady=5)
+    p_c_tabs.grid(column=1, row=7, columnspan=2, sticky=(N, S, E, W), padx=5, pady=5)
     fpath_label.grid(column=0, row=99, columnspan=4, sticky=(S, E, W), padx=5, pady=5)
     error_label.grid(column=0, row=100, columnspan=4, sticky=(S, E, W), padx=5, pady=1)
     size_frame.grid(column=1, row=5, columnspan=1, sticky=(N, S), padx=5, pady=2)
@@ -719,11 +739,12 @@ def TOAD_GUI():
     h_entry.grid(column=3, row=0, sticky=(N, S), padx=1, pady=0)
 
     # On p_c_frame:
-    play_button.grid(column=1, row=0, sticky=(N, S, E, W), padx=5, pady=5)
-    play_ai_button.grid(column=2, row=0, sticky=(N, S, E, W), padx=5, pady=5)
-    controls_frame.grid(column=3, row=0, sticky=(N, S, E, W), padx=5, pady=5)
-    ai_options_combobox.grid(column=2, row=2, sticky=(N, S, E, W), padx=5, pady=5)
-    selected_ai_checkbutton.grid(column=2, row=1, sticky=(N, S, E, W), padx=5, pady=5)
+    play_button.grid(column=0, row=0, rowspan=3, sticky=(N, S, E, W), padx=5, pady=5)
+    play_ai_button.grid(column=1, row=0, rowspan=3, sticky=(N, S, E, W), padx=5, pady=5)
+    controls_frame.grid(column=2, row=0, sticky=(N, S, E, W), padx=5, pady=5)
+    use_selected_ai_checkbutton.grid(column=2, row=1, sticky=(N, S, E, W), padx=5, pady=5)
+    ai_options_combobox.grid(column=2, row=2, columnspan=2, sticky=(N, S, E, W), padx=5, pady=5)
+
     # On controls_frame
     contr_a.grid(column=0, row=0, sticky=(N, S, E), padx=1, pady=1)
     contr_s.grid(column=0, row=1, sticky=(N, S, E), padx=1, pady=1)
@@ -735,7 +756,7 @@ def TOAD_GUI():
     descr_r.grid(column=1, row=3, sticky=(N, S, W), padx=1, pady=1)
 
     # On difficulty_frame
-    iterate_button.grid(column=1, row=0, sticky=(N, S, E, W), padx=5, pady=5)
+    iterate_button.grid(column=0, row=0, sticky=(N, S, E, W), padx=5, pady=5)
 
     # Column/Rowconfigure
     root.columnconfigure(0, weight=1)
@@ -757,10 +778,9 @@ def TOAD_GUI():
     settings.rowconfigure(99, weight=1)
     settings.rowconfigure(100, weight=1)
 
+    p_c_frame.columnconfigure(0, weight=2)
     p_c_frame.columnconfigure(1, weight=2)
-    p_c_frame.columnconfigure(2, weight=1)
-    p_c_frame.columnconfigure(3, weight=0)
-    p_c_frame.rowconfigure(0, weight=1)
+    p_c_frame.columnconfigure(2, weight=2)
 
     controls_frame.columnconfigure(0, weight=1)
     controls_frame.columnconfigure(1, weight=1)
@@ -769,10 +789,7 @@ def TOAD_GUI():
     controls_frame.rowconfigure(2, weight=1)
     controls_frame.rowconfigure(3, weight=1)
 
-    difficulty_frame.columnconfigure(1, weight=1)
-    difficulty_frame.columnconfigure(2, weight=1)
-    difficulty_frame.columnconfigure(3, weight=1)
-    difficulty_frame.rowconfigure(0, weight=1)
+    difficulty_frame.columnconfigure(0, weight=3)
     # ---------------------------------------- Edit Mode ----------------------------------------
 
     # Define Variables
@@ -792,17 +809,6 @@ def TOAD_GUI():
     bbox_y2.set(16)
     edit_scale.set(0)
     scale_info.set("Scale 0 window: 8x8")
-    base_ais = (
-        'robinBaumgarten', 'andySloane', 'doNothing', 'glennHartmann', 'michal', 'random', 'sergeyKarakovskiy',
-        'sergeyPolikarpov', 'spencerSchumann', 'trondEllingsen')
-    advanced_ais = (
-            'astar', 'astarDistanceMetric', 'astarFast', 'astarGrid', 'astarJump', 'astarPlanning',
-            'astarPlanningDynamic', 'astarWaypoints', 'astarWindow', 'robinBaumgartenSlim', 'robinBaumgartenSlimImproved',
-            'robinBaumgartenSlimWindowAdvance')
-    selection_ais = ('astar', 'astarPlanningDynamic', 'robinBaumgarten', 'random') # insert 'doNothing', if testing on fine granularity
-    ai_options_combobox['values'] = base_ais + advanced_ais
-    ai_options_combobox['state'] = 'readonly'
-    ai_options_combobox.current(0)
 
     # Placeholder for the noise representation
     noise_holder = Image.new('RGB', (8, 8), (255, 255, 255))
@@ -820,7 +826,7 @@ def TOAD_GUI():
     settings.rowconfigure(8, weight=1)
 
     # Edit mode frame
-    emode_frame = ttk.LabelFrame(p_c_frame, text="Edit mode controls", padding=(5, 5, 5, 5))
+    emode_frame = ttk.LabelFrame(edit_tab, text="Edit mode controls", padding=(5, 5, 5, 5))
     # Bounding Box frame
     bbox_frame = ttk.LabelFrame(emode_frame, text="Bounding Box", padding=(5, 5, 5, 5))
 
@@ -915,17 +921,14 @@ def TOAD_GUI():
     # Grid/Remove Edit mode widgets
     def toggle_editmode(t1, t2, t3):
         if editmode.get():
-            # Grid widgets
-            controls_frame.grid_configure(column=1, row=1)  # move frame to make room
-
-            # On settings:
-            emode_frame.grid(column=0, row=0, rowspan=2, sticky=(E, W), padx=10)
+            # On edit_tab:
+            emode_frame.grid(column=0, row=0, rowspan=3, sticky=(E, W), padx=10)
 
             # On emode_frame:
             bbox_frame.grid(column=0, row=0, columnspan=1, sticky=(E, W), padx=5, pady=5)
             resample_button.grid(column=0, row=5, columnspan=3, sticky=(N, S, E, W), padx=5, pady=5)
             sample_info.grid(column=0, row=4, columnspan=3, sticky=(N, S), padx=5, pady=5)
-            sc_frame.grid(column=1, row=0, columnspan=5, sticky=(N, S, E, W), padx=5, pady=5)
+            sc_frame.grid(column=1, row=0, columnspan=3, sticky=(N, S, E, W), padx=5, pady=5)
             sc_label.grid(column=0, row=0, columnspan=1, sticky=(N, S, E), padx=1, pady=5)
             sc_entry.grid(column=1, row=0, columnspan=1, sticky=(N, S, W), padx=1, pady=5)
             sc_info_label.grid(column=0, row=1, columnspan=2, sticky=(N, S, E, W), padx=1, pady=5)
@@ -970,8 +973,6 @@ def TOAD_GUI():
             update_scale_info(t1, t2, t3)
 
         else:
-            # Hide widgets
-            controls_frame.grid_configure(column=3, row=0)  # move frame back
             emode_frame.grid_forget()
             redraw_image(False)
 

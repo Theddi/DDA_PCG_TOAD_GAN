@@ -165,6 +165,7 @@ def TOAD_GUI():
     level_h = IntVar()
     load_string_gen = StringVar()
     load_string_txt = StringVar()
+    level_path = StringVar()
     error_msg = StringVar()
     use_gen = BooleanVar()
     is_loaded = BooleanVar()
@@ -175,6 +176,7 @@ def TOAD_GUI():
     level_h.set(0)
     load_string_gen.set("Click the buttons to open a level or generator.")
     load_string_txt.set(os.path.join(os.curdir, "levels"))
+    level_path.set(False)
     error_msg.set("No Errors")
     use_gen.set(False)
     is_loaded.set(False)
@@ -195,6 +197,7 @@ def TOAD_GUI():
 
             if fname[-3:] == "txt":
                 load_string_gen.set('Path: ' + fname)
+                level_path.set(fname)
                 folder, lname = os.path.split(fname)
                 level_obj.name = lname.replace(".txt", "")
 
@@ -462,6 +465,7 @@ def TOAD_GUI():
 
         # slicing and execution per mapslice
         if slice:
+            sourcePath = level_path.get()
             slicer = Mapslicer(level_obj)
             levelsPath = slicer.slice_level()
             for level in os.listdir(levelsPath):
@@ -471,7 +475,10 @@ def TOAD_GUI():
                         spawn_thread(q, play_level, ai, False, 2 if ai == "doNothing" else standard_agent_time, False, True))
                 for thread in threads:
                     thread.join()
-
+            if use_gen.get():
+                pass
+            else:
+                load_level_by_path(sourcePath)
         else:
             for ai in selection_ais:
                 threads.append(spawn_thread(q, play_level, ai, False, 2 if ai == "doNothing" else standard_agent_time, True, True))

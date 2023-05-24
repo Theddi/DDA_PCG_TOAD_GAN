@@ -522,8 +522,8 @@ def TOAD_GUI():
                     res = line.replace('\n', '').split(', ')
                     if len(res) > 1:
                         results.append(res)
-        for res in results:
-            print(res)
+        #for res in results:
+        #    print(res)
 
         is_loaded.set(True)
 

@@ -646,13 +646,18 @@ def TOAD_GUI():
     p_c_tabs.add(difficulty_frame, text="Difficulty Adjustment")
     iterate_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon, text='Iterate level with ai',
                          state='disabled', command=lambda: spawn_thread(q, ai_iterate_level))
-    das_value = IntVar()
+    current_difficulty_value = DoubleVar()
+    current_difficulty_label = ttk.Label(difficulty_frame, text="Current Difficulty: Not determined")
+    def difficulty_value_changed():
+        current_difficulty_label.config(text="Current Difficulty: "+str(current_difficulty_value.get()))
+    current_difficulty_value.trace("w", callback=difficulty_value_changed)
 
-    das_label = ttk.Label(difficulty_frame, text=0)
+    das_value = IntVar()
+    das_value_label = ttk.Label(difficulty_frame, text=" 0")
     def d_slider_changed(event):
         das_value.set(round(das_value.get()))
-        das_label.config(text=das_value.get())
-
+        das_value_label.config(text=das_value.get())
+    das_label = ttk.Label(difficulty_frame, text="Difficulty Adjustment")
     difficulty_adjustment_slider = ttk.Scale(difficulty_frame, from_=0, to=10, orient='horizontal', variable=das_value,
                                              command=d_slider_changed)
     das_value.set(0)
@@ -773,9 +778,12 @@ def TOAD_GUI():
     descr_r.grid(column=1, row=3, sticky=(N, S, W), padx=1, pady=1)
 
     # On difficulty_frame
-    iterate_button.grid(column=0, row=0, columnspan=2, sticky=(N, S, E, W), padx=5, pady=5)
-    difficulty_adjustment_slider.grid(column=0, row=1, sticky=(N, S, E, W), padx=5, pady=5)
-    das_label.grid(column=1, row=1, sticky=(N, S, E, W), padx=5, pady=5)
+    iterate_button.grid(column=0, row=0, rowspan=1, sticky=(N, S, E, W), padx=5, pady=5)
+    current_difficulty_label.grid(column=1, row=0, sticky=(N), padx=5, pady=5)
+    das_label.grid(column=0, row=1, sticky=(N, W), padx=5, pady=5)
+    difficulty_adjustment_slider.grid(column=0, row=1,sticky=(N), pady=5)
+    das_value_label.grid(column=0, row=1, sticky=(N, E), padx=5, pady=5)
+
 
     # Column/Rowconfigure
     root.columnconfigure(0, weight=1)
@@ -808,7 +816,8 @@ def TOAD_GUI():
     controls_frame.rowconfigure(2, weight=1)
     controls_frame.rowconfigure(3, weight=1)
 
-    difficulty_frame.columnconfigure(0, weight=2)
+    difficulty_frame.columnconfigure(0, weight=3)
+    difficulty_frame.columnconfigure(1, weight=1)
     difficulty_frame.rowconfigure(0, weight=1)
     # ---------------------------------------- Edit Mode ----------------------------------------
 

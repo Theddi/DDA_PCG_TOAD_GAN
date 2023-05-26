@@ -616,19 +616,20 @@ def TOAD_GUI():
         'robinBaumgarten', 'andySloane', 'doNothing', 'glennHartmann', 'michal', 'random', 'sergeyKarakovskiy',
         'sergeyPolikarpov', 'spencerSchumann', 'trondEllingsen')
     advanced_ais = (
-        'astar', 'astarDistanceMetric', 'astarFast', 'astarGrid', 'astarJump', 'astarPlanning',
-        'astarPlanningDynamic', 'astarWaypoints', 'astarWindow', 'robinBaumgartenSlim', 'robinBaumgartenSlimImproved',
+        'astar', 'astarDistanceMetric', 'astarFast', 'astarJump', 'astarPlanning',
+        'astarPlanningDynamic', 'astarWindow', 'robinBaumgartenSlim', 'robinBaumgartenSlimImproved',
         'robinBaumgartenSlimWindowAdvance')
+    # Currently not working , 'astarGrid', 'astarWaypoints'
     selection_ais = (
     'astar', 'astarPlanningDynamic', 'robinBaumgarten', 'random')  # insert 'doNothing', if testing on fine granularity
 
     ai_options_combobox = ttk.Combobox(p_c_frame, textvariable=selected_ai)
-    ai_options_combobox['values'] = base_ais + advanced_ais
+    ai_options_combobox['values'] = selection_ais
     ai_options_combobox['state'] = 'readonly'
     ai_options_combobox.current(0)
 
     use_selected_ai = BooleanVar()
-
+    use_selected_ai.set(True)
     def ai_switch():
         if use_selected_ai.get():
             ai_options_combobox['values'] = selection_ais

@@ -1,4 +1,3 @@
-import tkinter
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog as fd
@@ -55,8 +54,11 @@ def on_validate(in_str, act_type):
             return False
     return True
 
+
 genCounter = 0
 genName = ""
+
+
 # Object holding important data about the current level
 class LevelObject:
     def __init__(self, ascii_level, oh_level, image, tokens, scales, noises, name=""):
@@ -67,6 +69,7 @@ class LevelObject:
         self.scales = scales
         self.noises = noises
         self.name = name
+
     def save(self, into):
         into.oh_level = self.oh_level
         into.ascii_level = self.ascii_level
@@ -75,6 +78,7 @@ class LevelObject:
         into.scales = self.scales
         into.noises = self.noises
         into.tokens = self.tokens
+
     def restore(self, from_):
         self.oh_level = from_.oh_level
         self.ascii_level = from_.ascii_level
@@ -83,6 +87,7 @@ class LevelObject:
         self.scales = from_.scales
         self.noises = from_.noises
         self.tokens = from_.tokens
+
 
 class Mapslicer:
 
@@ -110,11 +115,13 @@ class Mapslicer:
         for i in range(0, levelWidth - self.width, stepSize):
             levelSlice = []
             for h in range(levelHeight):
-                levelSlice.append("\n"+self.level_mat[h][i:i+self.width] if h != 0 else ""+self.level_mat[h][i:i+self.width])
+                levelSlice.append("\n"+self.level_mat[h][i:i+self.width]
+                                  if h != 0 else ""+self.level_mat[h][i:i+self.width])
             sliceFileName = self.name+"_slice"+str(int(i/stepSize))+".txt"
             with open(outputpath+sliceFileName, 'w') as file:
                 file.writelines(levelSlice)
         return os.path.abspath(outputpath)
+
 
 # Main GUI code
 def TOAD_GUI():
@@ -251,6 +258,7 @@ def TOAD_GUI():
         except Exception:
             error_msg.set("No level file selected.")
         return
+
     def load_generator():
         fname = fd.askdirectory(title='Load Generator Directory', initialdir=os.path.join(os.curdir, 'generators'))
 
@@ -397,21 +405,19 @@ def TOAD_GUI():
         remember_use_gen = use_gen.get()
         use_gen.set(False)
 
-        #print("Level [" + level_obj.name + "] played by: " + ai)
-
         # Py4j Java bridge uses Mario AI Framework
         gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH_NEW, die_on_exit=True,
-                                                 redirect_stdout=sys.stdout,
-                                                 redirect_stderr=sys.stderr)
+                                             redirect_stdout=sys.stdout,
+                                             redirect_stderr=sys.stderr)
 
-        defaultagent = gateway.jvm.agents.robinBaumgarten.Agent()
+        agent = gateway.jvm.agents.robinBaumgarten.Agent()
         if ai in advanced_ais:
             game = gateway.jvm.mff.agents.common.AgentMarioGame()
         else:
             game = gateway.jvm.engine.core.MarioGame()
         try:
             if ai == "":
-                agent = defaultagent
+                pass
             elif ai in base_ais:
                 if ai == "andySloane":
                     agent = gateway.jvm.agents.andySloane.Agent()
@@ -467,7 +473,8 @@ def TOAD_GUI():
                 perc = int(result.getCompletionPercentage() * 100)
                 with FileLock(GAME_RESULT_PATH+LOCK_EXT):
                     with open(GAME_RESULT_PATH, 'a') as file:
-                        file.write(", ".join([level_obj.name, ai, str(perc), str(result.getRemainingTime()/1000), str(playtime)]) + "\n")
+                        file.write(", ".join([level_obj.name, ai, str(perc),
+                                              str(result.getRemainingTime()/1000), str(playtime)]) + "\n")
                 if not multicall:
                     error_msg.set("Level Played. Completion Percentage: %d%%" % perc)
                 else:
@@ -511,7 +518,8 @@ def TOAD_GUI():
                 load_level_by_path(os.path.join(levelsPath, level))
                 for ai in selection_ais:
                     threads.append(
-                        spawn_thread(q, play_level, ai, False, 2 if ai == "doNothing" else standard_agent_time, False, True))
+                        spawn_thread(q, play_level,
+                                     ai, False, 2 if ai == "doNothing" else standard_agent_time, False, True))
                 for thread in threads:
                     thread.join()
 
@@ -523,7 +531,8 @@ def TOAD_GUI():
                 use_gen.set(True)
         else:
             for ai in selection_ais:
-                threads.append(spawn_thread(q, play_level, ai, False, 2 if ai == "doNothing" else standard_agent_time, True, True))
+                threads.append(spawn_thread(q, play_level,
+                                            ai, False, 2 if ai == "doNothing" else standard_agent_time, True, True))
             for thread in threads:
                 thread.join()
 
@@ -607,10 +616,12 @@ def TOAD_GUI():
 
     p_c_frame = ttk.Frame(settings)
     p_c_tabs.add(p_c_frame, text="Play/Controls")
-    play_button = ttk.Button(p_c_frame, compound='top', image=play_level_icon, text='Play level',
-                         state='disabled', command=lambda: spawn_thread(q, play_level, "Human", False, 180))
-    play_ai_button = ttk.Button(p_c_frame, compound='top', image=play_ai_level_icon, text='AI Play level',
-                         state='disabled', command=lambda: spawn_thread(q, play_level, ai_options_combobox.get(), False, 30))
+    play_button = ttk.Button(p_c_frame, compound='top', image=play_level_icon,
+                             text='Play level', state='disabled',
+                             command=lambda: spawn_thread(q, play_level, "Human", False, 180))
+    play_ai_button = ttk.Button(p_c_frame, compound='top', image=play_ai_level_icon,
+                                text='AI Play level', state='disabled',
+                                command=lambda: spawn_thread(q, play_level, ai_options_combobox.get(), False, 30))
 
     selected_ai = StringVar()
     base_ais = (
@@ -621,8 +632,8 @@ def TOAD_GUI():
         'astarPlanningDynamic', 'astarWindow', 'robinBaumgartenSlim', 'robinBaumgartenSlimImproved',
         'robinBaumgartenSlimWindowAdvance')
     # Currently not working , 'astarGrid', 'astarWaypoints'
-    selection_ais = (
-    'astar', 'astarPlanningDynamic', 'robinBaumgarten', 'random')  # insert 'doNothing', if testing on fine granularity
+    selection_ais = ('astar', 'astarPlanningDynamic', 'robinBaumgarten', 'random')
+    # insert 'doNothing', if testing on fine granularity
 
     ai_options_combobox = ttk.Combobox(p_c_frame, textvariable=selected_ai)
     ai_options_combobox['values'] = selection_ais
@@ -631,6 +642,7 @@ def TOAD_GUI():
 
     use_selected_ai = BooleanVar()
     use_selected_ai.set(True)
+
     def ai_switch():
         if use_selected_ai.get():
             ai_options_combobox['values'] = selection_ais
@@ -644,16 +656,19 @@ def TOAD_GUI():
                                                   variable=use_selected_ai)
     difficulty_frame = ttk.Frame(settings)
     p_c_tabs.add(difficulty_frame, text="Difficulty Adjustment")
-    iterate_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon, text='Iterate level with ai',
-                         state='disabled', command=lambda: spawn_thread(q, ai_iterate_level))
+    iterate_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon,
+                                text='Iterate level with ai', state='disabled',
+                                command=lambda: spawn_thread(q, ai_iterate_level))
     current_difficulty_value = DoubleVar()
     current_difficulty_label = ttk.Label(difficulty_frame, text="Current Difficulty: Not determined")
+
     def difficulty_value_changed():
         current_difficulty_label.config(text="Current Difficulty: "+str(current_difficulty_value.get()))
     current_difficulty_value.trace("w", callback=difficulty_value_changed)
 
     das_value = IntVar()
     das_value_label = ttk.Label(difficulty_frame, text=" 0")
+
     def d_slider_changed(event):
         das_value.set(round(das_value.get()))
         das_value_label.config(text=das_value.get())
@@ -663,6 +678,7 @@ def TOAD_GUI():
     das_value.set(0)
 
     edit_tab = ttk.Frame(settings)
+
     def on_tab_change(event):
         tab = event.widget.tab('current')['text']
         if tab == 'Edit Mode':
@@ -781,9 +797,8 @@ def TOAD_GUI():
     iterate_button.grid(column=0, row=0, rowspan=1, sticky=(N, S, E, W), padx=5, pady=5)
     current_difficulty_label.grid(column=1, row=0, sticky=(N), padx=5, pady=5)
     das_label.grid(column=0, row=1, sticky=(N, W), padx=5, pady=5)
-    difficulty_adjustment_slider.grid(column=0, row=1,sticky=(N), pady=5)
+    difficulty_adjustment_slider.grid(column=0, row=1, sticky=(N), pady=5)
     das_value_label.grid(column=0, row=1, sticky=(N, E), padx=5, pady=5)
-
 
     # Column/Rowconfigure
     root.columnconfigure(0, weight=1)
@@ -909,7 +924,7 @@ def TOAD_GUI():
     # Resample Button and info
     resample_button = ttk.Button(emode_frame, text="Resample", state='disabled',
                                  command=lambda: spawn_thread(q, re_sample))
-    sample_info = ttk.Label(emode_frame, text=# "Right click to edit Tokens directly.\n"
+    sample_info = ttk.Label(emode_frame, text="Right click to edit Tokens directly.\n"
                                               "Resampling will regenerate the level,\n"
                                               "so prior Token edits will be lost.")
 

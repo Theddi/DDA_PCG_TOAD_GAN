@@ -1,0 +1,4 @@
+{"astar": 4.2,
+ "astarPlanningDynamic": 4.0,
+ "robinBaumgarten": 3.0,
+ "random": 0.5}

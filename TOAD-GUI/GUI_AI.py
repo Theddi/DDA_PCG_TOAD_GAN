@@ -20,6 +20,7 @@ from utils.toad_gan_utils import load_trained_pyramid, generate_sample, TOADGAN_
 
 from filelock import FileLock
 import shutil
+import json
 
 # PATHS
 CURDIR = os.path.abspath(os.path.curdir)
@@ -516,7 +517,7 @@ def TOAD_GUI():
             levelsPath = slicer.slice_level()
             for level in os.listdir(levelsPath):
                 load_level_by_path(os.path.join(levelsPath, level))
-                for ai in selection_ais:
+                for ai in list(ais_strength_dict.keys()):
                     threads.append(
                         spawn_thread(q, play_level,
                                      ai, False, 2 if ai == "doNothing" else standard_agent_time, False, True))
@@ -530,7 +531,7 @@ def TOAD_GUI():
             if setGen:
                 use_gen.set(True)
         else:
-            for ai in selection_ais:
+            for ai in list(ais_strength_dict.keys()):
                 threads.append(spawn_thread(q, play_level,
                                             ai, False, 2 if ai == "doNothing" else standard_agent_time, True, True))
             for thread in threads:
@@ -632,11 +633,15 @@ def TOAD_GUI():
         'astarPlanningDynamic', 'astarWindow', 'robinBaumgartenSlim', 'robinBaumgartenSlimImproved',
         'robinBaumgartenSlimWindowAdvance')
     # Currently not working , 'astarGrid', 'astarWaypoints'
-    selection_ais = ('astar', 'astarPlanningDynamic', 'robinBaumgarten', 'random')
+
+    ai_sel_file = 'ai_selection_strength.txt'
+    with open(ai_sel_file, "r") as f:
+        data = f.read()
+    ais_strength_dict = json.loads(data)
     # insert 'doNothing', if testing on fine granularity
 
     ai_options_combobox = ttk.Combobox(p_c_frame, textvariable=selected_ai)
-    ai_options_combobox['values'] = selection_ais
+    ai_options_combobox['values'] = list(ais_strength_dict.keys())
     ai_options_combobox['state'] = 'readonly'
     ai_options_combobox.current(0)
 
@@ -645,7 +650,7 @@ def TOAD_GUI():
 
     def ai_switch():
         if use_selected_ai.get():
-            ai_options_combobox['values'] = selection_ais
+            ai_options_combobox['values'] = list(ais_strength_dict.keys())
         else:
             ai_options_combobox['values'] = base_ais + advanced_ais
         ai_options_combobox.current(0)

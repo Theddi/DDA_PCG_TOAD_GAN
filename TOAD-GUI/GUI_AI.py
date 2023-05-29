@@ -35,7 +35,7 @@ pathExist = os.path.exists(OUT)
 if not pathExist:
     os.makedirs(OUT)
 # Path for game results
-GAME_RESULT_PATH = os.path.join(OUT, "results.txt")
+GAME_RESULT_PATH = os.path.join(OUT, "results.json")
 # Lock file extension
 LOCK_EXT = ".lock"
 
@@ -486,12 +486,15 @@ def TOAD_GUI():
                 perc = int(result.getCompletionPercentage() * 100)
                 current_completion.set(perc)
 
+                maplength = len(level_obj.ascii_level[0]) - 1
+                info_list = [level_obj.name, ai, maplength, perc,
+                             result.getRemainingTime() / 1000, playtime, get_num_enemies()]
+
                 with FileLock(GAME_RESULT_PATH+LOCK_EXT):
                     with open(GAME_RESULT_PATH, 'a') as file:
-                        maplength = len(level_obj.ascii_level[0])-1
-                        file.write(", ".join([level_obj.name, ai, str(maplength), str(perc),
-                                             str(result.getRemainingTime()/1000), str(playtime),
-                                             str(get_num_enemies())]) + "\n")
+                        #file.write(format_result_tostring(True, *info_list))
+                        json.dump(info_list, file)
+                        file.write("\n")
                 if not multicall:
                     error_msg.set("Level Played. Completion Percentage: %d%%" % perc)
                 else:
@@ -539,11 +542,17 @@ def TOAD_GUI():
 
     def print_results(results):
         for res in results:
-            print(f"{res[0]:<25}", end=" ")
-            print(f"{res[1]:<25}", end=" ")
-            for i in res[2:]:
-                print('{0: <10}'.format(format(i, "10.3f")) if isinstance(i, float) else '{0: <10}'.format(i), end=" ")
-            print("")
+            print(format_result_tostring(False, *res))
+
+    def format_result_tostring(newline=True, *args):
+        format_str = ", ".join([f"{args[0]:<25}", f"{args[1]:<25}"])
+        for i in args[2:]:
+            format_str += ", " + '{0: <10}'.format(format(i, "10.3f")) if isinstance(i, float) \
+                     else ", " + '{0: <3}'.format(i)
+        if newline:
+            format_str += '\n'
+        return format_str
+
     def ai_iterate_level(slice=True, clear=True):
         is_loaded.set(False)
         editmode.set(False)
@@ -598,18 +607,14 @@ def TOAD_GUI():
         with FileLock(GAME_RESULT_PATH + LOCK_EXT):
             with open(GAME_RESULT_PATH, 'r') as file:
                 for line in file:
-                    res = line.replace('\n', '').split(', ')
-                    if len(res) > 1:
-                        results.append(res)
-
+                    results.append(json.loads(line))
         error_msg.set("Iterating: Results collected")
 
         # Get difficulty per result and write to file
         results = get_difficulty(results)
         with FileLock(GAME_RESULT_PATH + LOCK_EXT):
             with open(GAME_RESULT_PATH, 'w') as file:
-                for res in results:
-                    file.write(", ".join(format(x, "10.3f") if isinstance(x, float) else str(x) for x in res) + "\n")
+                json.dump(results, file)
         error_msg.set("Iterating: difficulty on slices calculated")
 
         # column descriptions for pandas dataframe
@@ -618,11 +623,13 @@ def TOAD_GUI():
 
         # Print in console for overview
         #print(", ".join(columns))
-        #print_results(results)
+        print_results(results)
 
         # Work with dataframe
         result_dataframe = pd.DataFrame(results, columns=columns)
-        print(result_dataframe[['file_name', 'difficulty_score']].groupby(['file_name']).mean())
+        slice_difficulty_df = result_dataframe[['file_name', 'difficulty_score']].groupby(['file_name']).mean()
+        print(slice_difficulty_df)
+        slice_difficulty_df.mean()
 
         error_msg.set("Iterating Finished")
         is_loaded.set(True)

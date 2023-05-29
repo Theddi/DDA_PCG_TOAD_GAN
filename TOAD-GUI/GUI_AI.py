@@ -21,6 +21,8 @@ from utils.toad_gan_utils import load_trained_pyramid, generate_sample, TOADGAN_
 from filelock import FileLock
 import shutil
 import json
+import numpy as np
+import pandas as pd
 
 # PATHS
 CURDIR = os.path.abspath(os.path.curdir)
@@ -197,7 +199,10 @@ def TOAD_GUI():
     is_loaded = BooleanVar()
     q = queue.Queue()
 
+    current_completion = IntVar()
+
     # Set values
+    current_completion.set(1)
     level_l.set(0)
     level_h.set(0)
     load_string_gen.set("Click the buttons to open a level or generator.")
@@ -395,6 +400,13 @@ def TOAD_GUI():
             level_obj.image = img
             image_label.change_image(level_obj.image)
 
+    def get_num_enemies():
+        enemies = 0
+        for line in level_obj.ascii_level:
+            enemies += line.count('g')
+            enemies += line.count('k')
+        return enemies
+
     def play_level(ai_select="Human", loop=False, playtime=30, visuals=True, multicall=False):
         ai = ai_select
         if not multicall:
@@ -472,10 +484,14 @@ def TOAD_GUI():
                 result = game.runGame(agent, ''.join(level_obj.ascii_level), playtime, 0, visuals, 30, 2.0)
                 gateway.java_process.kill()
                 perc = int(result.getCompletionPercentage() * 100)
+                current_completion.set(perc)
+
                 with FileLock(GAME_RESULT_PATH+LOCK_EXT):
                     with open(GAME_RESULT_PATH, 'a') as file:
-                        file.write(", ".join([level_obj.name, ai, str(perc),
-                                              str(result.getRemainingTime()/1000), str(playtime)]) + "\n")
+                        maplength = len(level_obj.ascii_level[0])-1
+                        file.write(", ".join([level_obj.name, ai, str(maplength), str(perc),
+                                             str(result.getRemainingTime()/1000), str(playtime),
+                                             str(get_num_enemies())]) + "\n")
                 if not multicall:
                     error_msg.set("Level Played. Completion Percentage: %d%%" % perc)
                 else:
@@ -498,14 +514,54 @@ def TOAD_GUI():
         use_gen.set(remember_use_gen)  # only set use_gen to True if it was previously
         return
 
+    def get_difficulty(results):
+        alpha_t = 1.0
+        beta_ai = 1.0
+        gamma_enemies = 1.0
+        for res in results:
+            # Time needed with modifier
+            time_delta = alpha_t * (float(res[5]) - float(res[4]))
+
+            # Strength of ai with modifier
+            strength = beta_ai * ais_strength_dict[res[1]]
+
+            # Enemies per map length with modifier -- Took out of consideration due to double effect with completion percentage
+            #enemies = gamma_enemies * (int(res[6])/int(res[2]))
+
+            # Completion modifier, penalty on less comletion due to square
+            comp_mod = (100/int(res[3]))**1.5
+
+            # Difficulty completion in percent times strength times time plus the amount of enemies per maplength
+            difficulty = comp_mod * time_delta * strength
+
+            res.extend([comp_mod, time_delta, strength, difficulty]) #, enemies
+        return results
+
+    def print_results(results):
+        for res in results:
+            print(f"{res[0]:<25}", end=" ")
+            print(f"{res[1]:<25}", end=" ")
+            for i in res[2:]:
+                print('{0: <10}'.format(format(i, "10.3f")) if isinstance(i, float) else '{0: <10}'.format(i), end=" ")
+            print("")
     def ai_iterate_level(slice=True, clear=True):
         is_loaded.set(False)
         editmode.set(False)
         threads = []
         standard_agent_time = 10
         error_msg.set("Iterating...")
+
+        # Testing full level with strongest ai, to check if it's completable
+        testthread = spawn_thread(q, play_level, "astar", False, 30, False, True)
+        testthread.join()
+
         if clear and os.path.isfile(GAME_RESULT_PATH):
             shutil.rmtree(OUT, ignore_errors=True)
+
+        if current_completion.get() < 100:
+            error_msg.set("Level is not completable!")
+            is_loaded.set(True)
+            return
 
         # slicing and execution per mapslice
         if slice:
@@ -537,6 +593,7 @@ def TOAD_GUI():
             for thread in threads:
                 thread.join()
 
+        # read results from file
         results = []
         with FileLock(GAME_RESULT_PATH + LOCK_EXT):
             with open(GAME_RESULT_PATH, 'r') as file:
@@ -546,9 +603,26 @@ def TOAD_GUI():
                         results.append(res)
 
         error_msg.set("Iterating: Results collected")
-        ''' Result form: file name, agent, completion percentage, remaining time, total time'''
-        for res in results:
-            print(res)
+
+        # Get difficulty per result and write to file
+        results = get_difficulty(results)
+        with FileLock(GAME_RESULT_PATH + LOCK_EXT):
+            with open(GAME_RESULT_PATH, 'w') as file:
+                for res in results:
+                    file.write(", ".join(format(x, "10.3f") if isinstance(x, float) else str(x) for x in res) + "\n")
+        error_msg.set("Iterating: difficulty on slices calculated")
+
+        # column descriptions for pandas dataframe
+        columns = ["file_name", "agent", "map_length", "completion_percentage", "remaining_time", "total_time",
+                   "number_enemies", "completion_factor", "time_needed", "ai_strength", "difficulty_score"]
+
+        # Print in console for overview
+        #print(", ".join(columns))
+        #print_results(results)
+
+        # Work with dataframe
+        result_dataframe = pd.DataFrame(results, columns=columns)
+        print(result_dataframe[['file_name', 'difficulty_score']].groupby(['file_name']).mean())
 
         error_msg.set("Iterating Finished")
         is_loaded.set(True)

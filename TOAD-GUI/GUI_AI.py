@@ -629,7 +629,9 @@ def TOAD_GUI():
         result_dataframe = pd.DataFrame(results, columns=columns)
         slice_difficulty_df = result_dataframe[['file_name', 'difficulty_score']].groupby(['file_name']).mean()
         print(slice_difficulty_df)
-        slice_difficulty_df.mean()
+        level_difficulty = slice_difficulty_df[['difficulty_score']].mean()[0]
+        print(f"Level Difficulty: {level_difficulty}")
+        current_difficulty_value.set(round(level_difficulty, 3))
 
         error_msg.set("Iterating Finished")
         is_loaded.set(True)
@@ -748,7 +750,7 @@ def TOAD_GUI():
     current_difficulty_value = DoubleVar()
     current_difficulty_label = ttk.Label(difficulty_frame, text="Current Difficulty: Not determined")
 
-    def difficulty_value_changed():
+    def difficulty_value_changed(t1, t2, t3):
         current_difficulty_label.config(text="Current Difficulty: "+str(current_difficulty_value.get()))
     current_difficulty_value.trace("w", callback=difficulty_value_changed)
 

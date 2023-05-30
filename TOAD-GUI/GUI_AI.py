@@ -94,33 +94,31 @@ class LevelObject:
 
 class Mapslicer:
 
-    def __init__(self, level_obj, width=28):
+    def __init__(self, level_obj, iterations=28):
         self.name = level_obj.name
         self.level_mat = level_obj.ascii_level
-        self.width = width
-        if self.width % 2 != 0:
-            raise Exception("NoHalvableWidth")
+        self.width = iterations * 2
+        self.its = iterations
     '''
-    slice_level slices the level input read by read_level into slices of size width
+    slice_level slices the level input read by read_level into slices of size "width"
     Double the amount of slices will be created to better cover the whole map
-    Therefore the level is iterated in width/2 steps with width size
+    Therefore the level is iterated in "its" steps
     returns the path to the sliced files
     '''
     def slice_level(self):
         levelWidth = len(self.level_mat[0])
         levelHeight = len(self.level_mat)
-        stepSize = int(self.width / 2)
 
         outputpath = OUT+self.name+"_SLICED/"
         pathExist = os.path.exists(outputpath)
         if not pathExist:
             os.makedirs(outputpath)
-        for i in range(0, levelWidth - self.width, stepSize):
+        for i in range(0, levelWidth - self.width, self.its):
             levelSlice = []
             for h in range(levelHeight):
                 levelSlice.append("\n"+self.level_mat[h][i:i+self.width]
                                   if h != 0 else ""+self.level_mat[h][i:i+self.width])
-            sliceFileName = self.name+"_slice"+str(int(i/stepSize))+".txt"
+            sliceFileName = self.name+"_slice"+str(int(i/self.its))+".txt"
             with open(outputpath+sliceFileName, 'w') as file:
                 file.writelines(levelSlice)
         return os.path.abspath(outputpath)
@@ -412,11 +410,10 @@ def TOAD_GUI():
         if not multicall:
             error_msg.set("Playing level...")
             is_loaded.set(False)
-        else:
-            error_msg.set("Iterating: Playing with " + ai)
+            remember_use_gen = use_gen.get()
+            use_gen.set(False)
 
-        remember_use_gen = use_gen.get()
-        use_gen.set(False)
+
 
         # Py4j Java bridge uses Mario AI Framework
         gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH_NEW, die_on_exit=True,
@@ -505,16 +502,17 @@ def TOAD_GUI():
             if not multicall:
                 error_msg.set("Level Play was interrupted.")
                 is_loaded.set(True)
+                use_gen.set(remember_use_gen)
             else:
                 error_msg.set("Iterating: Level Play was interrupted.")
-            use_gen.set(remember_use_gen)
+
         finally:
             gateway.java_process.kill()
             gateway.close()
 
         if not multicall:
             is_loaded.set(True)
-        use_gen.set(remember_use_gen)  # only set use_gen to True if it was previously
+            use_gen.set(remember_use_gen)  # only set use_gen to True if it was previously
         return
 
     def get_difficulty(results):
@@ -553,7 +551,9 @@ def TOAD_GUI():
             format_str += '\n'
         return format_str
 
-    def ai_iterate_level(slice=True, clear=True):
+    def ai_iterate_level(slice=True, clear=True, sliceIts=12):
+        # Set variables
+        remGen = use_gen.get()
         is_loaded.set(False)
         editmode.set(False)
         threads = []
@@ -574,14 +574,12 @@ def TOAD_GUI():
 
         # slicing and execution per mapslice
         if slice:
-            setGen = False
             level_obj.save(level_obj_tmp)
-            if use_gen.get():
-                setGen = True
-            slicer = Mapslicer(level_obj)
+            slicer = Mapslicer(level_obj, sliceIts)
             levelsPath = slicer.slice_level()
             for level in os.listdir(levelsPath):
                 load_level_by_path(os.path.join(levelsPath, level))
+                is_loaded.set(False)
                 for ai in list(ais_strength_dict.keys()):
                     threads.append(
                         spawn_thread(q, play_level,
@@ -593,8 +591,6 @@ def TOAD_GUI():
             redraw_image()
             level_l.set(len(level_obj.ascii_level[0])-1)
             level_h.set(len(level_obj.ascii_level))
-            if setGen:
-                use_gen.set(True)
         else:
             for ai in list(ais_strength_dict.keys()):
                 threads.append(spawn_thread(q, play_level,
@@ -634,6 +630,7 @@ def TOAD_GUI():
         current_difficulty_value.set(round(level_difficulty, 3))
 
         error_msg.set("Iterating Finished")
+        use_gen.set(remGen)
         is_loaded.set(True)
 
     # ---------------------------------------- Layout ----------------------------------------

@@ -551,7 +551,7 @@ def TOAD_GUI():
             format_str += '\n'
         return format_str
 
-    def ai_iterate_level(slice=True, clear=True, sliceIts=12):
+    def ai_iterate_level(slice=True, clear=True, sliceIts=12, killJava=False):
         # Set variables
         remGen = use_gen.get()
         is_loaded.set(False)
@@ -631,6 +631,10 @@ def TOAD_GUI():
 
         error_msg.set("Iterating Finished")
         use_gen.set(remGen)
+        # Jvms happen to not get closed causing RAM problems,
+        # kill them here TODO: make sure jvm instances closing after execution
+        if killJava:
+            os.system("taskkill /f /im  java.exe")
         is_loaded.set(True)
 
     # ---------------------------------------- Layout ----------------------------------------

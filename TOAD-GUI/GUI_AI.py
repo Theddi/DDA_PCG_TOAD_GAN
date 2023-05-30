@@ -530,10 +530,13 @@ def TOAD_GUI():
             #enemies = gamma_enemies * (int(res[6])/int(res[2]))
 
             # Completion modifier, penalty on less comletion due to square
-            comp_mod = (100/int(res[3]))**1.5
+            completion = 100/int(res[3])
+            completion_multiplier = 0.5 if 100/int(res[3]) == 1 else 1
+            comp_mod = completion**1.5 * completion_multiplier
 
-            # Difficulty completion in percent times strength times time plus the amount of enemies per maplength
-            difficulty = comp_mod * time_delta * strength
+            # Difficulty completion dependent on completion rate, ai strength and time
+            stuck_release = 0.9 if time_delta == float(res[5]) else 1
+            difficulty = (comp_mod * strength) + time_delta**stuck_release
 
             res.extend([comp_mod, time_delta, strength, difficulty]) #, enemies
         return results

@@ -548,12 +548,11 @@ def TOAD_GUI():
             group['completion_factor'] = (100 / group[
                 'completion_percentage']) ** 1.5 * completion_multiplier
 
-            # Strength of ai with modifier
-            group['ai_strength'] = beta_ai * group['agent'].apply(lambda val: ais_strength_dict[val])
+            # Strength of ai with modifier, took out of consideration due to double effect with time
+            #group['ai_strength'] = beta_ai * group['agent'].apply(lambda val: ais_strength_dict[val])
 
             # Difficulty completion dependent on completion rate, ai strength and time
-            group['difficulty_score'] = group['completion_factor'] * group['ai_strength'] * \
-                                        (group['time_needed'] / base_time)
+            group['difficulty_score'] = 2 * group['completion_factor'] * (group['time_needed'] / base_time)**1.5
 
             new_dataframe = pd.concat([new_dataframe, group])
 

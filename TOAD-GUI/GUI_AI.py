@@ -23,6 +23,7 @@ import shutil
 import json
 import numpy as np
 import pandas as pd
+from IPython.display import display
 
 # PATHS
 CURDIR = os.path.abspath(os.path.curdir)
@@ -92,7 +93,6 @@ class LevelObject:
         self.noises = from_.noises
         self.tokens = from_.tokens
 
-
 class Mapslicer:
 
     def __init__(self, level_obj, iterations=28):
@@ -116,6 +116,18 @@ class Mapslicer:
         pathExist = os.path.exists(outputpath)
         if not pathExist:
             os.makedirs(outputpath)
+
+        # Create base level for time measurement
+        baseLevel = []
+        for h in range(levelHeight):
+            if h < levelHeight-2:
+                baseLevel.append("\n" + "-" * levelWidth if h != 0 else "" + "-" * (self.width-1))
+            else:
+                baseLevel.append("\n" + "X" * levelWidth if h != 0 else "" + "X" * (self.width-1))
+        with open(outputpath + self.name + "_slice_base.txt", 'w') as file:
+            file.writelines(baseLevel)
+
+        # Create level slices
         for i in range(0, levelWidth - self.width, self.its):
             levelSlice = []
             for h in range(levelHeight):
@@ -520,12 +532,16 @@ def TOAD_GUI():
         alpha_t = 1.0
         beta_ai = 1.0
 
+        # Get base time and remove baselevel result
+        base_time = resultDataframe.loc[resultDataframe['file_name'].str.contains("base"), 'time_needed'].iloc[0]
+        resultDataframe = resultDataframe.drop(resultDataframe[resultDataframe['file_name'].str.contains("base")].index)
+
         new_dataframe = pd.DataFrame()
         grouped = resultDataframe.groupby('file_name')
         for name, group in grouped:
-            # Check if random ai can complete slice and delete result for further calculations
+            # Check if random ai can complete slice and remove result
             randComp = group.loc[group['agent'] == 'random', 'completion_percentage'].iloc[0] == 100
-            group.drop(group[group['agent'] == 'random'].index)
+            group = group.drop(group[group['agent'] == 'random'].index)
 
             # Completion modifier, penalty on less comletion due to square
             completion_multiplier = 0.5 if randComp else 1
@@ -536,12 +552,13 @@ def TOAD_GUI():
             group['ai_strength'] = beta_ai * group['agent'].apply(lambda val: ais_strength_dict[val])
 
             # Difficulty completion dependent on completion rate, ai strength and time
-            group['difficulty_score'] = group['completion_factor'] * group['ai_strength'] + \
-                                                  group['time_needed'] ** (
-                                                      0.9 if group['time_needed'].equals(
-                                                          group['total_time']) else 1)
+            group['difficulty_score'] = group['completion_factor'] * group['ai_strength'] * \
+                                        (group['time_needed'] / base_time)
 
             new_dataframe = pd.concat([new_dataframe, group])
+
+        #pd.set_option('display.max_columns', None)
+        #display(new_dataframe)
 
         # Calculate mean
         new_dataframe = new_dataframe[['file_name', 'difficulty_score']].groupby('file_name').mean()
@@ -590,10 +607,13 @@ def TOAD_GUI():
             for level in os.listdir(levelsPath):
                 load_level_by_path(os.path.join(levelsPath, level))
                 is_loaded.set(False)
-                for ai in list(ais_strength_dict.keys()):
-                    threads.append(
-                        spawn_thread(q, play_level,
-                                     ai, False, 2 if ai == "doNothing" else standard_agent_time, False, True))
+                if "base" in level:
+                    threads.append(spawn_thread(q, play_level, "astar", False, standard_agent_time, False, True))
+                else:
+                    for ai in list(ais_strength_dict.keys()):
+                        threads.append(
+                            spawn_thread(q, play_level,
+                                         ai, False, 2 if ai == "doNothing" else standard_agent_time, False, True))
                 for thread in threads:
                     thread.join()
 

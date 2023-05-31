@@ -42,6 +42,7 @@ LOCK_EXT = ".lock"
 # Check if windows user
 if platform.system() == "Windows":
     import ctypes
+
     # Set Taskbar Icon
     my_appid = u'toad-gui.1.0'
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(my_appid)
@@ -99,27 +100,29 @@ class Mapslicer:
         self.level_mat = level_obj.ascii_level
         self.width = iterations * 2
         self.its = iterations
+
     '''
     slice_level slices the level input read by read_level into slices of size "width"
     Double the amount of slices will be created to better cover the whole map
     Therefore the level is iterated in "its" steps
     returns the path to the sliced files
     '''
+
     def slice_level(self):
         levelWidth = len(self.level_mat[0])
         levelHeight = len(self.level_mat)
 
-        outputpath = OUT+self.name+"_SLICED/"
+        outputpath = OUT + self.name + "_SLICED/"
         pathExist = os.path.exists(outputpath)
         if not pathExist:
             os.makedirs(outputpath)
         for i in range(0, levelWidth - self.width, self.its):
             levelSlice = []
             for h in range(levelHeight):
-                levelSlice.append("\n"+self.level_mat[h][i:i+self.width]
-                                  if h != 0 else ""+self.level_mat[h][i:i+self.width])
-            sliceFileName = self.name+"_slice"+str(int(i/self.its))+".txt"
-            with open(outputpath+sliceFileName, 'w') as file:
+                levelSlice.append("\n" + self.level_mat[h][i:i + self.width]
+                                  if h != 0 else "" + self.level_mat[h][i:i + self.width])
+            sliceFileName = self.name + "_slice" + str(int(i / self.its)) + ".txt"
+            with open(outputpath + sliceFileName, 'w') as file:
                 file.writelines(levelSlice)
         return os.path.abspath(outputpath)
 
@@ -316,7 +319,7 @@ def TOAD_GUI():
                 error_msg.set("Could not save level with this extension. Supported: .txt, .png")
             return
         else:
-            genFilePath = os.path.join(OUT, level_obj.name+".txt")
+            genFilePath = os.path.join(OUT, level_obj.name + ".txt")
             with open(genFilePath, 'w') as save_name:
                 text2save = ''.join(level_obj.ascii_level)
                 save_name.write(text2save)
@@ -372,10 +375,10 @@ def TOAD_GUI():
                 # Add numbers to rows and cols
                 l_draw = ImageDraw.Draw(pil_img)
                 for y in range(level_obj.oh_level.shape[-2]):
-                    l_draw.multiline_text((1, 4+y*16), str(y), (255, 255, 255),
+                    l_draw.multiline_text((1, 4 + y * 16), str(y), (255, 255, 255),
                                           stroke_width=-1, stroke_fill=(0, 0, 0))
                 for x in range(level_obj.oh_level.shape[-1]):
-                    l_draw.multiline_text((6+x*16, 0), "".join(["%s\n" % c for c in str(x)]), (255, 255, 255),
+                    l_draw.multiline_text((6 + x * 16, 0), "".join(["%s\n" % c for c in str(x)]), (255, 255, 255),
                                           stroke_width=-1, stroke_fill=(0, 0, 0), spacing=0,
                                           align='right')
                 # Add bounding box rectangle
@@ -386,7 +389,7 @@ def TOAD_GUI():
                 if n_pads > 0:  # if scale is chosen too big, this just does not render
                     padding_effect = 3 * n_pads
                     sc = level_obj.scales[scale].shape[-1] / level_obj.oh_level.shape[-1]
-                    scaling_effect = math.ceil((1/sc - 1) / 2)  # affected tokens in every direction
+                    scaling_effect = math.ceil((1 / sc - 1) / 2)  # affected tokens in every direction
                     aoe = (padding_effect + scaling_effect) * 16
                     affected_rect = [(rectangle[0][0] - aoe, rectangle[0][1] - aoe),
                                      (rectangle[1][0] + aoe, rectangle[1][1] + aoe)]
@@ -412,8 +415,6 @@ def TOAD_GUI():
             is_loaded.set(False)
             remember_use_gen = use_gen.get()
             use_gen.set(False)
-
-
 
         # Py4j Java bridge uses Mario AI Framework
         gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH_NEW, die_on_exit=True,
@@ -485,11 +486,11 @@ def TOAD_GUI():
 
                 maplength = len(level_obj.ascii_level[0]) - 1
                 info_list = [level_obj.name, ai, maplength, perc,
-                             result.getRemainingTime() / 1000, playtime, get_num_enemies()]
+                             playtime - (result.getRemainingTime() / 1000), playtime]
 
-                with FileLock(GAME_RESULT_PATH+LOCK_EXT):
+                with FileLock(GAME_RESULT_PATH + LOCK_EXT):
                     with open(GAME_RESULT_PATH, 'a') as file:
-                        #file.write(format_result_tostring(True, *info_list))
+                        # file.write(format_result_tostring(True, *info_list))
                         json.dump(info_list, file)
                         file.write("\n")
                 if not multicall:
@@ -515,31 +516,27 @@ def TOAD_GUI():
             use_gen.set(remember_use_gen)  # only set use_gen to True if it was previously
         return
 
-    def get_difficulty(results):
+    def get_difficulty(resultDataframe):
         alpha_t = 1.0
         beta_ai = 1.0
         gamma_enemies = 1.0
-        for res in results:
-            # Time needed with modifier
-            time_delta = alpha_t * (float(res[5]) - float(res[4]))
 
-            # Strength of ai with modifier
-            strength = beta_ai * ais_strength_dict[res[1]]
+        # Completion modifier, penalty on less comletion due to square
+        randComp = False
+        completion_multiplier = 0.5 if randComp == True else 1
+        resultDataframe['completion_factor'] = (100 / resultDataframe[
+            'completion_percentage']) ** 1.5 * completion_multiplier
 
-            # Enemies per map length with modifier -- Took out of consideration due to double effect with completion percentage
-            #enemies = gamma_enemies * (int(res[6])/int(res[2]))
+        # Strength of ai with modifier
+        resultDataframe['ai_strength'] = beta_ai * resultDataframe['agent'].apply(lambda val: ais_strength_dict[val])
 
-            # Completion modifier, penalty on less comletion due to square
-            completion = 100/int(res[3])
-            completion_multiplier = 0.5 if 100/int(res[3]) == 1 else 1
-            comp_mod = completion**1.5 * completion_multiplier
+        # Difficulty completion dependent on completion rate, ai strength and time
+        resultDataframe['difficulty_score'] = resultDataframe['completion_factor'] * resultDataframe['ai_strength'] + \
+                                              resultDataframe['time_needed'] ** (
+                                                  0.9 if resultDataframe['time_needed'].equals(
+                                                      resultDataframe['total_time']) else 1)
 
-            # Difficulty completion dependent on completion rate, ai strength and time
-            stuck_release = 0.9 if time_delta == float(res[5]) else 1
-            difficulty = (comp_mod * strength) + time_delta**stuck_release
-
-            res.extend([comp_mod, time_delta, strength, difficulty]) #, enemies
-        return results
+        return resultDataframe
 
     def print_results(results):
         for res in results:
@@ -549,7 +546,7 @@ def TOAD_GUI():
         format_str = ", ".join([f"{args[0]:<25}", f"{args[1]:<25}"])
         for i in args[2:]:
             format_str += ", " + '{0: <10}'.format(format(i, "10.3f")) if isinstance(i, float) \
-                     else ", " + '{0: <3}'.format(i)
+                else ", " + '{0: <3}'.format(i)
         if newline:
             format_str += '\n'
         return format_str
@@ -592,7 +589,7 @@ def TOAD_GUI():
 
             level_obj.restore(level_obj_tmp)
             redraw_image()
-            level_l.set(len(level_obj.ascii_level[0])-1)
+            level_l.set(len(level_obj.ascii_level[0]) - 1)
             level_h.set(len(level_obj.ascii_level))
         else:
             for ai in list(ais_strength_dict.keys()):
@@ -609,23 +606,20 @@ def TOAD_GUI():
                     results.append(json.loads(line))
         error_msg.set("Iterating: Results collected")
 
+        # Results into dataframe
+        # column descriptions for pandas dataframe
+        result_columns = ["file_name", "agent", "map_length", "completion_percentage", "time_needed", "total_time"]
+        # Appends "completion_factor", "ai_strength", "difficulty_score"
+        result_dataframe = pd.DataFrame(results, columns=result_columns)
+
         # Get difficulty per result and write to file
-        results = get_difficulty(results)
-        with FileLock(GAME_RESULT_PATH + LOCK_EXT):
-            with open(GAME_RESULT_PATH, 'w') as file:
-                json.dump(results, file)
+        result_dataframe = get_difficulty(result_dataframe)
         error_msg.set("Iterating: difficulty on slices calculated")
 
-        # column descriptions for pandas dataframe
-        columns = ["file_name", "agent", "map_length", "completion_percentage", "remaining_time", "total_time",
-                   "number_enemies", "completion_factor", "time_needed", "ai_strength", "difficulty_score"]
-
         # Print in console for overview
-        #print(", ".join(columns))
-        print_results(results)
+        # print_results(results)
 
         # Work with dataframe
-        result_dataframe = pd.DataFrame(results, columns=columns)
         slice_difficulty_df = result_dataframe[['file_name', 'difficulty_score']].groupby(['file_name']).mean()
         print(slice_difficulty_df)
         level_difficulty = slice_difficulty_df[['difficulty_score']].mean()[0]
@@ -755,7 +749,8 @@ def TOAD_GUI():
     current_difficulty_label = ttk.Label(difficulty_frame, text="Current Difficulty: Not determined")
 
     def difficulty_value_changed(t1, t2, t3):
-        current_difficulty_label.config(text="Current Difficulty: "+str(current_difficulty_value.get()))
+        current_difficulty_label.config(text="Current Difficulty: " + str(current_difficulty_value.get()))
+
     current_difficulty_value.trace("w", callback=difficulty_value_changed)
 
     das_value = IntVar()
@@ -764,6 +759,7 @@ def TOAD_GUI():
     def d_slider_changed(event):
         das_value.set(round(das_value.get()))
         das_value_label.config(text=das_value.get())
+
     das_label = ttk.Label(difficulty_frame, text="Difficulty Adjustment")
     difficulty_adjustment_slider = ttk.Scale(difficulty_frame, from_=0, to=10, orient='horizontal', variable=das_value,
                                              command=d_slider_changed)
@@ -978,7 +974,7 @@ def TOAD_GUI():
                      "influenced by a change in this scale."
 
     x1_tooltip = Tooltip(x1_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
-    x2_tooltip = Tooltip(x2_label, text=bbox_tt_string,  wraplength=250, bg="white", enabled=False)
+    x2_tooltip = Tooltip(x2_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
     y1_tooltip = Tooltip(y1_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
     y2_tooltip = Tooltip(y2_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
 
@@ -1101,8 +1097,8 @@ def TOAD_GUI():
             sc_frame.rowconfigure(1, weight=1)
             sc_frame.rowconfigure(2, weight=1)
 
-            redraw_image(True, rectangle=[(bbox_y1.get()*16, bbox_x1.get()*16),
-                                          (bbox_y2.get()*16, bbox_x2.get()*16)], scale=edit_scale.get())
+            redraw_image(True, rectangle=[(bbox_y1.get() * 16, bbox_x1.get() * 16),
+                                          (bbox_y2.get() * 16, bbox_x2.get() * 16)], scale=edit_scale.get())
 
             update_scale_info(t1, t2, t3)
 
@@ -1125,9 +1121,9 @@ def TOAD_GUI():
             if bbox_x2.get() >= len(level_obj.ascii_level):
                 bbox_x2.set(len(level_obj.ascii_level))
             if bbox_y1.get() >= bbox_y2.get():
-                bbox_y1.set(bbox_y2.get()-1)
+                bbox_y1.set(bbox_y2.get() - 1)
             if bbox_x1.get() >= bbox_x2.get():
-                bbox_x1.set(bbox_x2.get()-1)
+                bbox_x1.set(bbox_x2.get() - 1)
 
             redraw_image(True, rectangle=[(bbox_y1.get() * 16, bbox_x1.get() * 16),
                                           (bbox_y2.get() * 16, bbox_x2.get() * 16)], scale=edit_scale.get())
@@ -1143,7 +1139,7 @@ def TOAD_GUI():
                            (round(bbox_y2.get() * sc), round(bbox_x2.get() * sc))]
 
             # Get first tokens noise map on current scale as representation
-            noise_holder = Image.fromarray(level_obj.noises[edit_scale.get()][0, 0, 3:-3, 3:-3].cpu().numpy()*255)
+            noise_holder = Image.fromarray(level_obj.noises[edit_scale.get()][0, 0, 3:-3, 3:-3].cpu().numpy() * 255)
             noise_holder = noise_holder.convert('RGB')
 
             # Draw adjusted bounding box on noise map

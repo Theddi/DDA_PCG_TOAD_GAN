@@ -519,24 +519,34 @@ def TOAD_GUI():
     def get_difficulty(resultDataframe):
         alpha_t = 1.0
         beta_ai = 1.0
-        gamma_enemies = 1.0
 
-        # Completion modifier, penalty on less comletion due to square
-        randComp = False
-        completion_multiplier = 0.5 if randComp == True else 1
-        resultDataframe['completion_factor'] = (100 / resultDataframe[
-            'completion_percentage']) ** 1.5 * completion_multiplier
+        new_dataframe = pd.DataFrame()
+        grouped = resultDataframe.groupby('file_name')
+        for name, group in grouped:
+            # Check if random ai can complete slice and delete result for further calculations
+            randComp = group.loc[group['agent'] == 'random', 'completion_percentage'].iloc[0] == 100
+            group.drop(group[group['agent'] == 'random'].index)
 
-        # Strength of ai with modifier
-        resultDataframe['ai_strength'] = beta_ai * resultDataframe['agent'].apply(lambda val: ais_strength_dict[val])
+            # Completion modifier, penalty on less comletion due to square
+            completion_multiplier = 0.5 if randComp else 1
+            group['completion_factor'] = (100 / group[
+                'completion_percentage']) ** 1.5 * completion_multiplier
 
-        # Difficulty completion dependent on completion rate, ai strength and time
-        resultDataframe['difficulty_score'] = resultDataframe['completion_factor'] * resultDataframe['ai_strength'] + \
-                                              resultDataframe['time_needed'] ** (
-                                                  0.9 if resultDataframe['time_needed'].equals(
-                                                      resultDataframe['total_time']) else 1)
+            # Strength of ai with modifier
+            group['ai_strength'] = beta_ai * group['agent'].apply(lambda val: ais_strength_dict[val])
 
-        return resultDataframe
+            # Difficulty completion dependent on completion rate, ai strength and time
+            group['difficulty_score'] = group['completion_factor'] * group['ai_strength'] + \
+                                                  group['time_needed'] ** (
+                                                      0.9 if group['time_needed'].equals(
+                                                          group['total_time']) else 1)
+
+            new_dataframe = pd.concat([new_dataframe, group])
+
+        # Calculate mean
+        new_dataframe = new_dataframe[['file_name', 'difficulty_score']].groupby('file_name').mean()
+
+        return new_dataframe
 
     def print_results(results):
         for res in results:
@@ -612,16 +622,14 @@ def TOAD_GUI():
         # Appends "completion_factor", "ai_strength", "difficulty_score"
         result_dataframe = pd.DataFrame(results, columns=result_columns)
 
-        # Get difficulty per result and write to file
-        result_dataframe = get_difficulty(result_dataframe)
+        # Get difficulty per result and average over slice
+        slice_difficulty_df = get_difficulty(result_dataframe)
         error_msg.set("Iterating: difficulty on slices calculated")
 
         # Print in console for overview
         # print_results(results)
 
-        # Work with dataframe
-        slice_difficulty_df = result_dataframe[['file_name', 'difficulty_score']].groupby(['file_name']).mean()
-        print(slice_difficulty_df)
+        # Get level difficulty by slice average
         level_difficulty = slice_difficulty_df[['difficulty_score']].mean()[0]
         print(f"Level Difficulty: {level_difficulty}")
         current_difficulty_value.set(round(level_difficulty, 3))

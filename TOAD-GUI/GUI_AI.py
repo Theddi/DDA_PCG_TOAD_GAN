@@ -131,9 +131,10 @@ class Mapslicer:
         for i in range(0, levelWidth - self.width, self.its):
             levelSlice = []
             for h in range(levelHeight):
+                number = "%03d" % int(i / self.its)
                 levelSlice.append("\n" + self.level_mat[h][i:i + self.width]
                                   if h != 0 else "" + self.level_mat[h][i:i + self.width])
-            sliceFileName = self.name + "_slice" + str(int(i / self.its)) + ".txt"
+            sliceFileName = self.name + "_slice" + number + ".txt"
             with open(outputpath + sliceFileName, 'w') as file:
                 file.writelines(levelSlice)
         return os.path.abspath(outputpath)
@@ -545,8 +546,7 @@ def TOAD_GUI():
 
             # Completion modifier, penalty on less comletion due to square
             completion_multiplier = 0.5 if randComp else 1
-            group['completion_factor'] = (100 / group[
-                'completion_percentage']) ** 1.5 * completion_multiplier
+            group['completion_factor'] = (100 / group['completion_percentage']) * completion_multiplier
 
             # Strength of ai with modifier, took out of consideration due to double effect with time
             #group['ai_strength'] = beta_ai * group['agent'].apply(lambda val: ais_strength_dict[val])
@@ -581,6 +581,7 @@ def TOAD_GUI():
         remGen = use_gen.get()
         is_loaded.set(False)
         editmode.set(False)
+        current_difficulty_label.config(text="Current Difficulty: determining...")
         threads = []
         standard_agent_time = 10
         error_msg.set("Iterating...")
@@ -609,6 +610,7 @@ def TOAD_GUI():
                     threads.append(spawn_thread(q, play_level, "astar", False, standard_agent_time, False, True))
                 else:
                     for ai in list(ais_strength_dict.keys()):
+                        # Play level with agent
                         threads.append(
                             spawn_thread(q, play_level,
                                          ai, False, 2 if ai == "doNothing" else standard_agent_time, False, True))

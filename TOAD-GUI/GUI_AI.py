@@ -36,7 +36,7 @@ pathExist = os.path.exists(OUT)
 if not pathExist:
     os.makedirs(OUT)
 # Path for game results
-GAME_RESULT_PATH = os.path.join(OUT, "results.json")
+GAME_RESULT_PATH = os.path.join(OUT, "results.txt")
 # Lock file extension
 LOCK_EXT = ".lock"
 
@@ -556,8 +556,7 @@ def TOAD_GUI():
 
             new_dataframe = pd.concat([new_dataframe, group])
 
-        #pd.set_option('display.max_columns', None)
-        #display(new_dataframe)
+        new_dataframe.to_csv(GAME_RESULT_PATH)
 
         # Calculate mean
         new_dataframe = new_dataframe[['file_name', 'difficulty_score']].groupby('file_name').mean()

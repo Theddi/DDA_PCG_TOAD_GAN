@@ -651,8 +651,17 @@ def TOAD_GUI():
 
         # Get level difficulty by slice average
         level_difficulty = slice_difficulty_df[['difficulty_score']].mean()[0]
-        print(f"Level Difficulty: {level_difficulty}")
+        as_list = slice_difficulty_df.index.tolist()
+        as_list = [x[-3:] for x in as_list]
+        slice_difficulty_df.index = as_list
+        slice_difficulty_df = pd.concat([slice_difficulty_df,
+                                         pd.DataFrame([{'difficulty_score': level_difficulty}],
+                                                      index = ['Full'], columns = slice_difficulty_df.columns)])
         current_difficulty_value.set(round(level_difficulty, 3))
+
+        fig = slice_difficulty_df.plot(x=slice_difficulty_df.index.name, xlabel="Slice",
+                                       y="difficulty_score", ylabel="Difficulty", kind="bar").get_figure()
+        fig.savefig(OUT+"Difficulty_Plot.png")
 
         error_msg.set("Iterating Finished")
         use_gen.set(remGen)
@@ -771,7 +780,7 @@ def TOAD_GUI():
     difficulty_frame = ttk.Frame(settings)
     p_c_tabs.add(difficulty_frame, text="Difficulty Adjustment")
     iterate_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon,
-                                text='Iterate level with ai', state='disabled',
+                                text='Determine difficulty with ai', state='disabled',
                                 command=lambda: spawn_thread(q, ai_iterate_level))
     current_difficulty_value = DoubleVar()
     current_difficulty_label = ttk.Label(difficulty_frame, text="Current Difficulty: Not determined")

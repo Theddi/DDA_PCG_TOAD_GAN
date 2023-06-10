@@ -14,7 +14,7 @@ import sys
 
 from utils.scrollable_image import ScrollableImage
 from utils.tooltip import Tooltip
-from utils.level_utils import read_level_from_file, one_hot_to_ascii_level, place_a_mario_token, ascii_to_one_hot_level
+from utils.level_utils import read_level_from_file, one_hot_to_ascii_level, place_a_mario_token, place_token_with_limits
 from utils.level_image_gen import LevelImageGen
 from utils.toad_gan_utils import load_trained_pyramid, generate_sample, TOADGAN_obj
 
@@ -95,7 +95,7 @@ class LevelObject:
 
 class Mapslicer:
 
-    def __init__(self, level_obj, iterations=28):
+    def __init__(self, level_obj, iterations=12):
         self.name = level_obj.name
         self.level_mat = level_obj.ascii_level
         self.width = iterations * 2
@@ -352,6 +352,7 @@ def TOAD_GUI():
 
             # Generate level
             level_obj.name = genName + "_C" + str(genCounter)
+
             level, scales, noises = generate_sample(toadgan_obj.Gs, toadgan_obj.Zs, toadgan_obj.reals,
                                                     toadgan_obj.NoiseAmp, toadgan_obj.num_layers,
                                                     toadgan_obj.token_list,
@@ -373,11 +374,17 @@ def TOAD_GUI():
         if is_loaded.get():
             # Check if a Mario token exists - if not, we need to place one
             m_exists = False
+            f_exists = False
             for line in level_obj.ascii_level:
                 if 'M' in line:
                     m_exists = True
+                if 'F' in line:
+                    f_exists = True
             if not m_exists:
-                level_obj.ascii_level = place_a_mario_token(level_obj.ascii_level)
+                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level)
+            if not f_exists:
+                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level, token='F')
+
             if use_gen.get():
                 level_obj.tokens = toadgan_obj.token_list
 
@@ -421,7 +428,8 @@ def TOAD_GUI():
             enemies += line.count('k')
         return enemies
 
-    def play_level(ai_select="Human", loop=False, playtime=30, visuals=True, multicall=False):
+    def play_level(ai_select="Human", loop=False, playtime=30, visuals=True,
+                   multicall=False, baselevel=None, slice_name=level_obj.name):
         ai = ai_select
         if not multicall:
             error_msg.set("Playing level...")
@@ -492,13 +500,16 @@ def TOAD_GUI():
                 agent = gateway.jvm.agents.human.Agent()
             oneLoop = True
             while loop or oneLoop:
-                result = game.runGame(agent, ''.join(level_obj.ascii_level), playtime, 0, visuals, 30, 2.0)
+                if baselevel:
+                    result = game.runGame(agent, ''.join(baselevel), playtime, 0, visuals, 30, 2.0)
+                else:
+                    result = game.runGame(agent, ''.join(level_obj.ascii_level), playtime, 0, visuals, 30, 2.0)
                 gateway.java_process.kill()
                 perc = int(result.getCompletionPercentage() * 100)
                 current_completion.set(perc)
 
                 maplength = len(level_obj.ascii_level[0]) - 1
-                info_list = [level_obj.name, ai, maplength, perc,
+                info_list = [slice_name, ai, maplength, perc,
                              playtime - (result.getRemainingTime() / 1000), playtime]
 
                 with FileLock(GAME_RESULT_PATH + LOCK_EXT):
@@ -576,51 +587,99 @@ def TOAD_GUI():
             format_str += '\n'
         return format_str
 
+    def delete_mario_finish():
+        mar_fin = [None, None]
+        for height, line in enumerate(level_obj.ascii_level):
+            for length, tok in enumerate(line):
+                if tok == 'M' or tok == 'F':
+                    tmp_slice = list(level_obj.ascii_level[height])
+                    tmp_slice[length] = '-'
+                    level_obj.ascii_level[height] = "".join(tmp_slice)
+                if tok == 'M':
+                    mar_fin[0] = (height, length)
+                if tok == 'F':
+                    mar_fin[1] = (height, length)
+        return mar_fin
+
+    def set_mario_finish(mar_fin):
+        for height, line in enumerate(level_obj.ascii_level):
+            for length, tok in enumerate(line):
+                if height == mar_fin[0][0] and length == mar_fin[0][1]:
+                    tmp_slice = list(level_obj.ascii_level[height])
+                    tmp_slice[length] = 'M'
+                    level_obj.ascii_level[height] = "".join(tmp_slice)
+                if height == mar_fin[1][0] and length == mar_fin[1][1]:
+                    tmp_slice = list(level_obj.ascii_level[height])
+                    tmp_slice[length] = 'F'
+                    level_obj.ascii_level[height] = "".join(tmp_slice)
+        return mar_fin
+
+    def create_base_slice(height, length):
+        # Create base level for time measurement
+        baseLevel = []
+        for h in range(height):
+            if h < height - 2:
+                baseLevel.append("-" * (length - 1) + "\n")
+            else:
+                baseLevel.append("X" * (length - 1) + "\n")
+        return baseLevel
+
     def ai_iterate_level(slice=True, clear=True, sliceIts=12, killJava=False):
         # Set variables
         remGen = use_gen.get()
         is_loaded.set(False)
         editmode.set(False)
-        current_difficulty_label.config(text="Current Difficulty: determining...")
         threads = []
         standard_agent_time = 10
         error_msg.set("Iterating...")
 
         # Testing full level with strongest ai, to check if it's completable
+        current_difficulty_label.config(text="Current Difficulty: playtesting...")
         testthread = spawn_thread(q, play_level, "astar", False, 30, False, True)
         testthread.join()
 
+        current_difficulty_label.config(text="Current Difficulty: determining...")
         if clear and os.path.isfile(GAME_RESULT_PATH):
             shutil.rmtree(OUT, ignore_errors=True)
 
         if current_completion.get() < 100:
+            current_difficulty_label.config(text="Current Difficulty: Error")
             error_msg.set("Level is not completable!")
             is_loaded.set(True)
             return
 
-        # slicing and execution per mapslice
+        # Determines slices by setting Mario and Finish position in level_obj, and iterates those with AI before reset
         if slice:
-            level_obj.save(level_obj_tmp)
-            slicer = Mapslicer(level_obj, sliceIts)
-            levelsPath = slicer.slice_level()
-            for level in os.listdir(levelsPath):
-                load_level_by_path(os.path.join(levelsPath, level))
+            sliceLength = sliceIts * 2
+            sliceHeight = 16
+
+            # Create and play Base level
+            baselevel = create_base_slice(sliceHeight, sliceLength)
+            spawn_thread(q, play_level, "astar", False, standard_agent_time, False, True, baselevel, "base").join()
+
+            marfin = delete_mario_finish()
+            # Create level slices
+            levelWidth = len(level_obj.ascii_level[0])
+            for i in range(0, levelWidth - sliceLength, sliceIts):
+                name = level_obj.name + "_slice" + "%03d" % int(i / sliceIts)
+                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level, i, i + sliceLength, 'M')
+                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level, i, i + sliceLength, 'F')
+
+                #print("".join(level_obj.ascii_level))
+                #print()
                 is_loaded.set(False)
-                if "base" in level:
-                    threads.append(spawn_thread(q, play_level, "astar", False, standard_agent_time, False, True))
-                else:
-                    for ai in list(ais_strength_dict.keys()):
-                        # Play level with agent
-                        threads.append(
-                            spawn_thread(q, play_level,
-                                         ai, False, 2 if ai == "doNothing" else standard_agent_time, False, True))
+                for ai in list(ais_strength_dict.keys()):
+                    # Play level with agent
+                    threads.append(
+                        spawn_thread(q, play_level,
+                                     ai, False, 2 if ai == "doNothing" else standard_agent_time,
+                                     False, True, None, name))
                 for thread in threads:
                     thread.join()
+                delete_mario_finish()
 
-            level_obj.restore(level_obj_tmp)
+            set_mario_finish(marfin)
             redraw_image()
-            level_l.set(len(level_obj.ascii_level[0]) - 1)
-            level_h.set(len(level_obj.ascii_level))
         else:
             for ai in list(ais_strength_dict.keys()):
                 threads.append(spawn_thread(q, play_level,

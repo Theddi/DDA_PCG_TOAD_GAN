@@ -55,12 +55,15 @@ def read_level_from_file(input_dir, input_name, tokens=None):  # , replace_token
     return np.expand_dims(oh_level, 0), uniques
 
 
+solid_tokens = ['X', '#', 'S', '%', 't', '?', '@', '!', 'C', 'D', 'U', 'L']
+
+
 def place_a_mario_token(level):
     """ Finds the first plausible spot to place Mario on. Especially important for levels with floating platforms.
     level is expected to be ascii."""
     # First check if default spot is available
     for j in range(1, 4):
-        if level[-3][j] == '-' and level[-2][j] in ['X', '#', 'S', '%', 't', '?', '@', '!', 'C', 'D', 'U', 'L']:
+        if level[-3][j] == '-' and level[-2][j] in solid_tokens:
             tmp_slice = list(level[-3])
             tmp_slice[j] = 'M'
             level[-3] = "".join(tmp_slice)
@@ -69,10 +72,45 @@ def place_a_mario_token(level):
     # If not, check for first possible location from left
     for j in range(len(level[-1])):
         for i in range(1, len(level)):
-            if level[i - 1][j] == '-' and level[i][j] in ['X', '#', 'S', '%', 't', '?', '@', '!', 'C', 'D', 'U', 'L']:
+            if level[i - 1][j] == '-' and level[i][j] in solid_tokens:
                 tmp_slice = list(level[i - 1])
                 tmp_slice[j] = 'M'
                 level[i - 1] = "".join(tmp_slice)
                 return level
 
     return level  # Will only be reached if there is no place to put Mario
+
+
+def is_token_stuck(level, height, length, begin):
+    if level[height+1][length] in solid_tokens \
+         and level[height-1][length] in solid_tokens \
+         and level[height][length+1] in solid_tokens \
+         and (level[height][length-1] in solid_tokens or length == begin):
+        return True
+    return False
+
+
+def place_token_with_limits(level, begin=None, end=None, token='M'):
+    if token == 'M':
+        # Check for first possible location from lower left
+        for j in range(len(level[-1])):
+            if (j < begin if begin else False) or (j > end if end else False):
+                continue
+            for i in reversed(range(1, len(level))):
+                if level[i - 1][j] == '-' and level[i][j] in solid_tokens and not is_token_stuck(level, i-1, j, begin):
+                    tmp_slice = list(level[i - 1])
+                    tmp_slice[j] = 'M'
+                    level[i - 1] = "".join(tmp_slice)
+                    return level
+    elif token == 'F':
+        # Check for last possible location from lower right
+        for j in reversed(range(len(level[-1]))):
+            if (j < begin if begin else False) or (j > end if end else False):
+                continue
+            for i in reversed(range(1, len(level))):
+                if level[i - 1][j] == '-' and level[i][j] in solid_tokens:
+                    tmp_slice = list(level[i - 1])
+                    tmp_slice[j] = 'F'
+                    level[i - 1] = "".join(tmp_slice)
+                    return level
+    return level

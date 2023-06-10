@@ -179,3 +179,7 @@ cython_debug/
 **/output/
 markovjuniorpy/src/environment.txt
 *.class
+**/tmp/
+
+# Ignores because of unknown duplicate creation
+*(*).*

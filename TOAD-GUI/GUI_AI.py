@@ -18,13 +18,32 @@ from utils.level_utils import read_level_from_file, one_hot_to_ascii_level, plac
 from utils.level_image_gen import LevelImageGen
 from utils.toad_gan_utils import load_trained_pyramid, generate_sample, TOADGAN_obj
 
+from filelock import FileLock
+import shutil
+import json
+import numpy as np
+import pandas as pd
+from IPython.display import display
+
+# PATHS
+CURDIR = os.path.abspath(os.path.curdir)
 # Path to the AI Framework jar for Playing levels
-MARIO_AI_PATH = os.path.abspath(os.path.join(os.path.curdir, "Mario-AI-Framework/mario-1.0-SNAPSHOT.jar"))
-MARIO_AI_PATH_NEW = os.path.abspath(os.path.join(os.path.curdir, "Mario-AI-Framework/Mario-AI-FrameworkImproved.jar"))
+MARIO_AI_PATH = os.path.join(CURDIR, "Mario-AI-Framework/mario-1.0-SNAPSHOT.jar")
+MARIO_AI_PATH_NEW = os.path.join(CURDIR, "Mario-AI-Framework/Mario-AI-FrameworkImproved.jar")
+# Output folder
+OUT = os.path.join(CURDIR, "tmp/")
+pathExist = os.path.exists(OUT)
+if not pathExist:
+    os.makedirs(OUT)
+# Path for game results
+GAME_RESULT_PATH = os.path.join(OUT, "results.txt")
+# Lock file extension
+LOCK_EXT = ".lock"
 
 # Check if windows user
 if platform.system() == "Windows":
     import ctypes
+
     # Set Taskbar Icon
     my_appid = u'toad-gui.1.0'
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(my_appid)
@@ -41,37 +60,111 @@ def on_validate(in_str, act_type):
     return True
 
 
+genCounter = 0
+genName = ""
+
+
 # Object holding important data about the current level
 class LevelObject:
-    def __init__(self, ascii_level, oh_level, image, tokens, scales, noises):
+    def __init__(self, ascii_level, oh_level, image, tokens, scales, noises, name=""):
         self.ascii_level = ascii_level
         self.oh_level = oh_level  # one-hot encoded
         self.image = image
         self.tokens = tokens
         self.scales = scales
         self.noises = noises
+        self.name = name
+
+    def save(self, into):
+        into.oh_level = self.oh_level
+        into.ascii_level = self.ascii_level
+        into.name = self.name
+        into.image = self.image
+        into.scales = self.scales
+        into.noises = self.noises
+        into.tokens = self.tokens
+
+    def restore(self, from_):
+        self.oh_level = from_.oh_level
+        self.ascii_level = from_.ascii_level
+        self.name = from_.name
+        self.image = from_.image
+        self.scales = from_.scales
+        self.noises = from_.noises
+        self.tokens = from_.tokens
+
+class Mapslicer:
+
+    def __init__(self, level_obj, iterations=28):
+        self.name = level_obj.name
+        self.level_mat = level_obj.ascii_level
+        self.width = iterations * 2
+        self.its = iterations
+
+    '''
+    slice_level slices the level input read by read_level into slices of size "width"
+    Double the amount of slices will be created to better cover the whole map
+    Therefore the level is iterated in "its" steps
+    returns the path to the sliced files
+    '''
+
+    def slice_level(self):
+        levelWidth = len(self.level_mat[0])
+        levelHeight = len(self.level_mat)
+
+        outputpath = OUT + self.name + "_SLICED/"
+        pathExist = os.path.exists(outputpath)
+        if not pathExist:
+            os.makedirs(outputpath)
+
+        # Create base level for time measurement
+        baseLevel = []
+        for h in range(levelHeight):
+            if h < levelHeight-2:
+                baseLevel.append("\n" + "-" * levelWidth if h != 0 else "" + "-" * (self.width-1))
+            else:
+                baseLevel.append("\n" + "X" * levelWidth if h != 0 else "" + "X" * (self.width-1))
+        with open(outputpath + self.name + "_slice_base.txt", 'w') as file:
+            file.writelines(baseLevel)
+
+        # Create level slices
+        for i in range(0, levelWidth - self.width, self.its):
+            levelSlice = []
+            for h in range(levelHeight):
+                number = "%03d" % int(i / self.its)
+                levelSlice.append("\n" + self.level_mat[h][i:i + self.width]
+                                  if h != 0 else "" + self.level_mat[h][i:i + self.width])
+            sliceFileName = self.name + "_slice" + number + ".txt"
+            with open(outputpath + sliceFileName, 'w') as file:
+                file.writelines(levelSlice)
+        return os.path.abspath(outputpath)
 
 
 # Main GUI code
-def TOAD_GUI(marioversion="base"):
+def TOAD_GUI():
     # Init Window
     root = Tk(className=" TOAD-GUI")
 
     # Thread Functions to keep GUI alive when playing/loading/generating
     class ThreadedClient(threading.Thread):
-        def __init__(self, que, fcn):
+        def __init__(self, que, fcn, *args):
             threading.Thread.__init__(self)
             self.que = que
             self.fcn = fcn
+            self.args = args
 
         def run(self):
             time.sleep(0.01)
-            self.que.put(self.fcn())
+            if len(self.args) > 0:
+                self.que.put(self.fcn(*self.args))
+            else:
+                self.que.put(self.fcn())
 
-    def spawn_thread(que, fcn):
-        thread = ThreadedClient(que, fcn)
+    def spawn_thread(que, fcn, *args):
+        thread = ThreadedClient(que, fcn, *args)
         thread.start()
         periodic_call(thread)
+        return thread
 
     def periodic_call(thread):
         if thread.is_alive():
@@ -85,6 +178,7 @@ def TOAD_GUI(marioversion="base"):
     generate_level_icon = ImageTk.PhotoImage(Image.open('icons/gear_toad.png'))
     play_level_icon = ImageTk.PhotoImage(Image.open('icons/play_button.png'))
     play_ai_level_icon = ImageTk.PhotoImage(Image.open('icons/play_ai_button.png'))
+    iterate_level_icon = ImageTk.PhotoImage(Image.open('icons/iterate_button.png'))
     save_level_icon = ImageTk.PhotoImage(Image.open('icons/save_button.png'))
 
     root.iconphoto(False, toad_icon)
@@ -106,22 +200,28 @@ def TOAD_GUI(marioversion="base"):
 
     # Define Variables
     level_obj = LevelObject('-', None, levelimage, ['-'], None, None)
+    level_obj_tmp = LevelObject('-', None, levelimage, ['-'], None, None)
     toadgan_obj = TOADGAN_obj(None, None, None, None, None, None)
 
     level_l = IntVar()
     level_h = IntVar()
     load_string_gen = StringVar()
     load_string_txt = StringVar()
+    level_path = StringVar()
     error_msg = StringVar()
     use_gen = BooleanVar()
     is_loaded = BooleanVar()
     q = queue.Queue()
 
+    current_completion = IntVar()
+
     # Set values
+    current_completion.set(1)
     level_l.set(0)
     level_h.set(0)
     load_string_gen.set("Click the buttons to open a level or generator.")
     load_string_txt.set(os.path.join(os.curdir, "levels"))
+    level_path.set(False)
     error_msg.set("No Errors")
     use_gen.set(False)
     is_loaded.set(False)
@@ -130,6 +230,9 @@ def TOAD_GUI(marioversion="base"):
     def load_level():
         fname = fd.askopenfilename(title='Load Level', initialdir=os.path.join(os.curdir, 'levels'),
                                    filetypes=[("level .txt files", "*.txt")])
+        load_level_by_path(fname)
+
+    def load_level_by_path(fname):
         if len(fname) == 0:
             return  # loading was cancelled
         try:
@@ -139,7 +242,9 @@ def TOAD_GUI(marioversion="base"):
 
             if fname[-3:] == "txt":
                 load_string_gen.set('Path: ' + fname)
+                level_path.set(fname)
                 folder, lname = os.path.split(fname)
+                level_obj.name = lname.replace(".txt", "")
 
                 # Load level
                 lev, tok = read_level_from_file(folder, lname)
@@ -185,6 +290,8 @@ def TOAD_GUI(marioversion="base"):
             is_loaded.set(False)
             load_string_gen.set('Path: ' + fname)
             folder = fname
+            global genName
+            genName = os.path.split(fname)[1]
 
             # Load TOAD-GAN
             loadgan, msg = load_trained_pyramid(folder)
@@ -208,23 +315,32 @@ def TOAD_GUI(marioversion="base"):
 
         return
 
-    def save_txt():
-        save_name = fd.asksaveasfile(title='Save level (.txt/.png)', initialdir=os.path.join(os.curdir, "levels"),
-                                     mode='w', defaultextension=".txt",
-                                     filetypes=[("txt files", ".txt"), ("png files", ".png")])
-        if save_name is None:
-            return  # saving was cancelled
-        elif save_name.name[-3:] == "txt":
-            text2save = ''.join(level_obj.ascii_level)
-            save_name.write(text2save)
-            save_name.close()
-        elif save_name.name[-3:] == "png":
-            ImgGen.render(level_obj.ascii_level).save(save_name.name)
+    def save_txt(current=False):
+        if not current:
+            save_name = fd.asksaveasfile(title='Save level (.txt/.png)', initialdir=os.path.join(os.curdir, "levels"),
+                                         mode='w', defaultextension=".txt",
+                                         filetypes=[("txt files", ".txt"), ("png files", ".png")])
+            if save_name is None:
+                return  # saving was cancelled
+            elif save_name.name[-3:] == "txt":
+                text2save = ''.join(level_obj.ascii_level)
+                save_name.write(text2save)
+                save_name.close()
+            elif save_name.name[-3:] == "png":
+                ImgGen.render(level_obj.ascii_level).save(save_name.name)
+            else:
+                error_msg.set("Could not save level with this extension. Supported: .txt, .png")
+            return
         else:
-            error_msg.set("Could not save level with this extension. Supported: .txt, .png")
-        return
+            genFilePath = os.path.join(OUT, level_obj.name + ".txt")
+            with open(genFilePath, 'w') as save_name:
+                text2save = ''.join(level_obj.ascii_level)
+                save_name.write(text2save)
+            return genFilePath
 
     def generate():
+        global genCounter
+        genCounter += 1
         if toadgan_obj.Gs is None:
             error_msg.set("Generator did not load correctly. Are all necessary files in the folder?")
         else:
@@ -235,6 +351,7 @@ def TOAD_GUI(marioversion="base"):
             sc_l = level_l.get() / toadgan_obj.reals[-1].shape[-1]
 
             # Generate level
+            level_obj.name = genName + "_C" + str(genCounter)
             level, scales, noises = generate_sample(toadgan_obj.Gs, toadgan_obj.Zs, toadgan_obj.reals,
                                                     toadgan_obj.NoiseAmp, toadgan_obj.num_layers,
                                                     toadgan_obj.token_list,
@@ -271,10 +388,10 @@ def TOAD_GUI(marioversion="base"):
                 # Add numbers to rows and cols
                 l_draw = ImageDraw.Draw(pil_img)
                 for y in range(level_obj.oh_level.shape[-2]):
-                    l_draw.multiline_text((1, 4+y*16), str(y), (255, 255, 255),
+                    l_draw.multiline_text((1, 4 + y * 16), str(y), (255, 255, 255),
                                           stroke_width=-1, stroke_fill=(0, 0, 0))
                 for x in range(level_obj.oh_level.shape[-1]):
-                    l_draw.multiline_text((6+x*16, 0), "".join(["%s\n" % c for c in str(x)]), (255, 255, 255),
+                    l_draw.multiline_text((6 + x * 16, 0), "".join(["%s\n" % c for c in str(x)]), (255, 255, 255),
                                           stroke_width=-1, stroke_fill=(0, 0, 0), spacing=0,
                                           align='right')
                 # Add bounding box rectangle
@@ -285,7 +402,7 @@ def TOAD_GUI(marioversion="base"):
                 if n_pads > 0:  # if scale is chosen too big, this just does not render
                     padding_effect = 3 * n_pads
                     sc = level_obj.scales[scale].shape[-1] / level_obj.oh_level.shape[-1]
-                    scaling_effect = math.ceil((1/sc - 1) / 2)  # affected tokens in every direction
+                    scaling_effect = math.ceil((1 / sc - 1) / 2)  # affected tokens in every direction
                     aoe = (padding_effect + scaling_effect) * 16
                     affected_rect = [(rectangle[0][0] - aoe, rectangle[0][1] - aoe),
                                      (rectangle[1][0] + aoe, rectangle[1][1] + aoe)]
@@ -297,19 +414,35 @@ def TOAD_GUI(marioversion="base"):
             level_obj.image = img
             image_label.change_image(level_obj.image)
 
-    def play_level(agent_sel="human"):
-        error_msg.set("Playing level...")
-        is_loaded.set(False)
-        remember_use_gen = use_gen.get()
-        use_gen.set(False)
+    def get_num_enemies():
+        enemies = 0
+        for line in level_obj.ascii_level:
+            enemies += line.count('g')
+            enemies += line.count('k')
+        return enemies
+
+    def play_level(ai_select="Human", loop=False, playtime=30, visuals=True, multicall=False):
+        ai = ai_select
+        if not multicall:
+            error_msg.set("Playing level...")
+            is_loaded.set(False)
+            remember_use_gen = use_gen.get()
+            use_gen.set(False)
+
         # Py4j Java bridge uses Mario AI Framework
-        gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH, die_on_exit=True, redirect_stdout=sys.stdout, redirect_stderr=sys.stderr)
-        game = gateway.jvm.engine.core.MarioGame()
+        gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH_NEW, die_on_exit=True,
+                                             redirect_stdout=sys.stdout,
+                                             redirect_stderr=sys.stderr)
+
+        agent = gateway.jvm.agents.robinBaumgarten.Agent()
+        if ai in advanced_ais:
+            game = gateway.jvm.mff.agents.common.AgentMarioGame()
+        else:
+            game = gateway.jvm.engine.core.MarioGame()
         try:
-            game.initVisuals(2.0)
-            agent = gateway.jvm.agents.human.Agent()
-            if agent_sel != "human":
-                ai = ai_options_combobox.get()
+            if ai == "":
+                pass
+            elif ai in base_ais:
                 if ai == "andySloane":
                     agent = gateway.jvm.agents.andySloane.Agent()
                 if ai == "doNothing":
@@ -328,105 +461,215 @@ def TOAD_GUI(marioversion="base"):
                     agent = gateway.jvm.agents.spencerSchumann.Agent()
                 if ai == "trondEllingsen":
                     agent = gateway.jvm.agents.trondEllingsen.Agent()
-                if ai == "robinBaumgarten" or ai == "":
+                if ai == "robinBaumgarten":
                     agent = gateway.jvm.agents.robinBaumgarten.Agent()
-
-            game.setAgent(agent)
-            while True:
-                result = game.gameLoop(''.join(level_obj.ascii_level), 200, 0, True, 30)
+            elif ai in advanced_ais:
+                if ai == "astar":
+                    agent = gateway.jvm.mff.agents.astar.Agent()
+                if ai == "astarDistanceMetric":
+                    agent = gateway.jvm.mff.agents.astarDistanceMetric.Agent()
+                if ai == "astarFast":
+                    agent = gateway.jvm.mff.agents.astarFast.Agent()
+                if ai == "astarGrid":
+                    agent = gateway.jvm.mff.agents.astarGrid.Agent()
+                if ai == "astarJump":
+                    agent = gateway.jvm.mff.agents.astarJump.Agent()
+                if ai == "astarPlanning":
+                    agent = gateway.jvm.mff.agents.astarPlanning.Agent()
+                if ai == "astarPlanningDynamic":
+                    agent = gateway.jvm.mff.agents.astarPlanningDynamic.Agent()
+                if ai == "astarWaypoints":
+                    agent = gateway.jvm.mff.agents.astarWaypoints.Agent()
+                if ai == "astarWindow":
+                    agent = gateway.jvm.mff.agents.astarWindow.Agent()
+                if ai == "robinBaumgartenSlim":
+                    agent = gateway.jvm.mff.agents.robinBaumgartenSlim.Agent()
+                if ai == "robinBaumgartenSlimImproved":
+                    agent = gateway.jvm.mff.agents.robinBaumgartenSlimImproved.Agent()
+                if ai == "robinBaumgartenSlimWindowAdvance":
+                    agent = gateway.jvm.mff.agents.robinBaumgartenSlimWindowAdvance.Agent()
+            else:
+                agent = gateway.jvm.agents.human.Agent()
+            oneLoop = True
+            while loop or oneLoop:
+                result = game.runGame(agent, ''.join(level_obj.ascii_level), playtime, 0, visuals, 30, 2.0)
+                gateway.java_process.kill()
                 perc = int(result.getCompletionPercentage() * 100)
-                error_msg.set("Level Played. Completion Percentage: %d%%" % perc)
-        except Exception:
-            error_msg.set("Level Play was interrupted.")
-            is_loaded.set(True)
-            use_gen.set(remember_use_gen)
-        finally:
-            game.getWindow().dispose()
-            gateway.java_process.kill()
-            gateway.close()
+                current_completion.set(perc)
 
-        is_loaded.set(True)
-        use_gen.set(remember_use_gen)  # only set use_gen to True if it was previously
-        return
+                maplength = len(level_obj.ascii_level[0]) - 1
+                info_list = [level_obj.name, ai, maplength, perc,
+                             playtime - (result.getRemainingTime() / 1000), playtime]
 
-    def play_level_new(agent_sel="human"):
-        error_msg.set("Playing level...")
-        is_loaded.set(False)
-        remember_use_gen = use_gen.get()
-        use_gen.set(False)
-        # Py4j Java bridge uses Mario AI Framework
-        gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH_NEW, die_on_exit=True, redirect_stdout=sys.stdout, redirect_stderr=sys.stderr)
-        ai = ai_options_combobox.get()
-        if ai in advanced_ais:
-            game = gateway.jvm.mff.agents.common.AgentMarioGame()
-        else:
-            game = gateway.jvm.engine.core.MarioGame()
-        try:
-            agent = gateway.jvm.agents.human.Agent()
-            if agent_sel != "human":
-                if ai in base_ais:
-                    if ai == "andySloane":
-                        agent = gateway.jvm.agents.andySloane.Agent()
-                    if ai == "doNothing":
-                        agent = gateway.jvm.agents.doNothing.Agent()
-                    if ai == "glennHartmann":
-                        agent = gateway.jvm.agents.glennHartmann.Agent()
-                    if ai == "michal":
-                        agent = gateway.jvm.agents.michal.Agent()
-                    if ai == "random":
-                        agent = gateway.jvm.agents.random.Agent()
-                    if ai == "sergeyKarakovskiy":
-                        agent = gateway.jvm.agents.sergeyKarakovskiy.Agent()
-                    if ai == "sergeyPolikarpov":
-                        agent = gateway.jvm.agents.sergeyPolikarpov.Agent()
-                    if ai == "spencerSchumann":
-                        agent = gateway.jvm.agents.spencerSchumann.Agent()
-                    if ai == "trondEllingsen":
-                        agent = gateway.jvm.agents.trondEllingsen.Agent()
-                    if ai == "robinBaumgarten":
-                        agent = gateway.jvm.agents.robinBaumgarten.Agent()
-                elif ai in advanced_ais:
-                    if ai == "astarDistanceMetric":
-                        agent = gateway.jvm.mff.agents.astarDistanceMetric.Agent()
-                    if ai == "astarFast":
-                        agent = gateway.jvm.mff.agents.astarFast.Agent()
-                    if ai == "astarGrid":
-                        agent = gateway.jvm.mff.agents.astarGrid.Agent()
-                    if ai == "astarJump":
-                        agent = gateway.jvm.mff.agents.astarJump.Agent()
-                    if ai == "astarPlanning":
-                        agent = gateway.jvm.mff.agents.astarPlanning.Agent()
-                    if ai == "astarPlanningDynamic":
-                        agent = gateway.jvm.mff.agents.astarPlanningDynamic.Agent()
-                    if ai == "astarWaypoints":
-                        agent = gateway.jvm.mff.agents.astarWaypoints.Agent()
-                    if ai == "astarWindow":
-                        agent = gateway.jvm.mff.agents.astarWindow.Agent()
-                    if ai == "robinBaumgartenSlim":
-                        agent = gateway.jvm.mff.agents.robinBaumgartenSlim.Agent()
-                    if ai == "robinBaumgartenSlimImproved":
-                        agent = gateway.jvm.mff.agents.robinBaumgartenSlimImproved.Agent()
-                    if ai == "robinBaumgartenSlimWindowAdvance":
-                        agent = gateway.jvm.mff.agents.robinBaumgartenSlimWindowAdvance.Agent()
-                    if ai == "astar" or ai == "":
-                        agent = gateway.jvm.mff.agents.astar.Agent()
+                with FileLock(GAME_RESULT_PATH + LOCK_EXT):
+                    with open(GAME_RESULT_PATH, 'a') as file:
+                        # file.write(format_result_tostring(True, *info_list))
+                        json.dump(info_list, file)
+                        file.write("\n")
+                if not multicall:
+                    error_msg.set("Level Played. Completion Percentage: %d%%" % perc)
                 else:
-                    agent = gateway.jvm.agents.robinBaumgarten.Agent()
-            while True:
-                result = game.runGame(agent, ''.join(level_obj.ascii_level), 180, 0, True, 30, 2.0)
-                perc = int(result.getCompletionPercentage() * 100)
-                error_msg.set("Level Played. Completion Percentage: %d%%" % perc)
+                    error_msg.set("Iterating: " + ai + " completion percentage: %d%%" % perc)
+                oneLoop = False
+
         except Exception:
-            error_msg.set("Level Play was interrupted.")
-            is_loaded.set(True)
-            use_gen.set(remember_use_gen)
+            if not multicall:
+                error_msg.set("Level Play was interrupted.")
+                is_loaded.set(True)
+                use_gen.set(remember_use_gen)
+            else:
+                error_msg.set("Iterating: Level Play was interrupted.")
+
         finally:
             gateway.java_process.kill()
             gateway.close()
 
-        is_loaded.set(True)
-        use_gen.set(remember_use_gen)  # only set use_gen to True if it was previously
+        if not multicall:
+            is_loaded.set(True)
+            use_gen.set(remember_use_gen)  # only set use_gen to True if it was previously
         return
+
+    def get_difficulty(resultDataframe):
+        alpha_t = 1.0
+        beta_ai = 1.0
+
+        # Get base time and remove baselevel result
+        base_time = resultDataframe.loc[resultDataframe['file_name'].str.contains("base"), 'time_needed'].iloc[0]
+        resultDataframe = resultDataframe.drop(resultDataframe[resultDataframe['file_name'].str.contains("base")].index)
+
+        new_dataframe = pd.DataFrame()
+        grouped = resultDataframe.groupby('file_name')
+        for name, group in grouped:
+            # Check if random ai can complete slice and remove result
+            randComp = group.loc[group['agent'] == 'random', 'completion_percentage'].iloc[0] == 100
+            group = group.drop(group[group['agent'] == 'random'].index)
+
+            # Completion modifier, penalty on less comletion due to square
+            completion_multiplier = 0.5 if randComp else 1
+            group['completion_factor'] = (100 / group['completion_percentage']) * completion_multiplier
+
+            # Strength of ai with modifier, took out of consideration due to double effect with time
+            #group['ai_strength'] = beta_ai * group['agent'].apply(lambda val: ais_strength_dict[val])
+
+            # Difficulty completion dependent on completion rate, ai strength and time
+            group['difficulty_score'] = 2 * group['completion_factor'] * (group['time_needed'] / base_time)**1.5
+
+            new_dataframe = pd.concat([new_dataframe, group])
+
+        new_dataframe.to_csv(GAME_RESULT_PATH)
+
+        # Calculate mean
+        new_dataframe = new_dataframe[['file_name', 'difficulty_score']].groupby('file_name').mean()
+
+        return new_dataframe
+
+    def print_results(results):
+        for res in results:
+            print(format_result_tostring(False, *res))
+
+    def format_result_tostring(newline=True, *args):
+        format_str = ", ".join([f"{args[0]:<25}", f"{args[1]:<25}"])
+        for i in args[2:]:
+            format_str += ", " + '{0: <10}'.format(format(i, "10.3f")) if isinstance(i, float) \
+                else ", " + '{0: <3}'.format(i)
+        if newline:
+            format_str += '\n'
+        return format_str
+
+    def ai_iterate_level(slice=True, clear=True, sliceIts=12, killJava=False):
+        # Set variables
+        remGen = use_gen.get()
+        is_loaded.set(False)
+        editmode.set(False)
+        current_difficulty_label.config(text="Current Difficulty: determining...")
+        threads = []
+        standard_agent_time = 10
+        error_msg.set("Iterating...")
+
+        # Testing full level with strongest ai, to check if it's completable
+        testthread = spawn_thread(q, play_level, "astar", False, 30, False, True)
+        testthread.join()
+
+        if clear and os.path.isfile(GAME_RESULT_PATH):
+            shutil.rmtree(OUT, ignore_errors=True)
+
+        if current_completion.get() < 100:
+            error_msg.set("Level is not completable!")
+            is_loaded.set(True)
+            return
+
+        # slicing and execution per mapslice
+        if slice:
+            level_obj.save(level_obj_tmp)
+            slicer = Mapslicer(level_obj, sliceIts)
+            levelsPath = slicer.slice_level()
+            for level in os.listdir(levelsPath):
+                load_level_by_path(os.path.join(levelsPath, level))
+                is_loaded.set(False)
+                if "base" in level:
+                    threads.append(spawn_thread(q, play_level, "astar", False, standard_agent_time, False, True))
+                else:
+                    for ai in list(ais_strength_dict.keys()):
+                        # Play level with agent
+                        threads.append(
+                            spawn_thread(q, play_level,
+                                         ai, False, 2 if ai == "doNothing" else standard_agent_time, False, True))
+                for thread in threads:
+                    thread.join()
+
+            level_obj.restore(level_obj_tmp)
+            redraw_image()
+            level_l.set(len(level_obj.ascii_level[0]) - 1)
+            level_h.set(len(level_obj.ascii_level))
+        else:
+            for ai in list(ais_strength_dict.keys()):
+                threads.append(spawn_thread(q, play_level,
+                                            ai, False, 2 if ai == "doNothing" else standard_agent_time, True, True))
+            for thread in threads:
+                thread.join()
+
+        # read results from file
+        results = []
+        with FileLock(GAME_RESULT_PATH + LOCK_EXT):
+            with open(GAME_RESULT_PATH, 'r') as file:
+                for line in file:
+                    results.append(json.loads(line))
+        error_msg.set("Iterating: Results collected")
+
+        # Results into dataframe
+        # column descriptions for pandas dataframe
+        result_columns = ["file_name", "agent", "map_length", "completion_percentage", "time_needed", "total_time"]
+        # Appends "completion_factor", "ai_strength", "difficulty_score"
+        result_dataframe = pd.DataFrame(results, columns=result_columns)
+
+        # Get difficulty per result and average over slice
+        slice_difficulty_df = get_difficulty(result_dataframe)
+        error_msg.set("Iterating: difficulty on slices calculated")
+
+        # Print in console for overview
+        # print_results(results)
+
+        # Get level difficulty by slice average
+        level_difficulty = slice_difficulty_df[['difficulty_score']].mean()[0]
+        as_list = slice_difficulty_df.index.tolist()
+        as_list = [x[-3:] for x in as_list]
+        slice_difficulty_df.index = as_list
+        slice_difficulty_df = pd.concat([slice_difficulty_df,
+                                         pd.DataFrame([{'difficulty_score': level_difficulty}],
+                                                      index = ['Full'], columns = slice_difficulty_df.columns)])
+        current_difficulty_value.set(round(level_difficulty, 3))
+
+        fig = slice_difficulty_df.plot(x=slice_difficulty_df.index.name, xlabel="Slice",
+                                       y="difficulty_score", ylabel="Difficulty", kind="bar").get_figure()
+        fig.savefig(OUT+"Difficulty_Plot.png")
+
+        error_msg.set("Iterating Finished")
+        use_gen.set(remGen)
+        # Jvms happen to not get closed causing RAM problems,
+        # kill them here TODO: make sure jvm instances closing after execution
+        if killJava:
+            os.system("taskkill /f /im  java.exe")
+        is_loaded.set(True)
 
     # ---------------------------------------- Layout ----------------------------------------
 
@@ -472,7 +715,7 @@ def TOAD_GUI(marioversion="base"):
                 save_button.state(['!disabled'])
             h_entry.state(['!disabled'])
             l_entry.state(['!disabled'])
-            emode_box.state(['!disabled'])
+            p_c_tabs.tab(2, state="normal")
         else:
             gen_button.state(['disabled'])
             if not is_loaded.get():
@@ -482,51 +725,91 @@ def TOAD_GUI(marioversion="base"):
                 editmode.set(False)
             h_entry.state(['disabled'])
             l_entry.state(['disabled'])
-            emode_box.state(['disabled'])
+            p_c_tabs.tab(2, state="disabled")
         return
 
     use_gen.trace("w", callback=set_button_state)
 
-    # Play and Controls frame
-    p_c_frame = ttk.Frame(settings)
-    if marioversion == "new":
-        play_button = ttk.Button(p_c_frame, compound='top', image=play_level_icon, text='Play level',
-                             state='disabled', command=lambda: spawn_thread(q, play_level_new))
-        play_ai_button = ttk.Button(p_c_frame, compound='top', image=play_ai_level_icon, text='AI Play level',
-                             state='disabled', command=lambda: spawn_thread(q, play_level_new("AI")))
-    else:
-        play_button = ttk.Button(p_c_frame, compound='top', image=play_level_icon, text='Play level',
-                                 state='disabled', command=lambda: spawn_thread(q, play_level))
-        play_ai_button = ttk.Button(p_c_frame, compound='top', image=play_ai_level_icon, text='AI Play level',
-                                    state='disabled', command=lambda: spawn_thread(q, play_level("AI")))
+    # Play and Controls Notebook
+    p_c_tabs = ttk.Notebook(settings)
 
+    p_c_frame = ttk.Frame(settings)
+    p_c_tabs.add(p_c_frame, text="Play/Controls")
+    play_button = ttk.Button(p_c_frame, compound='top', image=play_level_icon,
+                             text='Play level', state='disabled',
+                             command=lambda: spawn_thread(q, play_level, "Human", False, 180))
+    play_ai_button = ttk.Button(p_c_frame, compound='top', image=play_ai_level_icon,
+                                text='AI Play level', state='disabled',
+                                command=lambda: spawn_thread(q, play_level, ai_options_combobox.get(), False, 30))
+
+    selected_ai = StringVar()
     base_ais = (
         'robinBaumgarten', 'andySloane', 'doNothing', 'glennHartmann', 'michal', 'random', 'sergeyKarakovskiy',
         'sergeyPolikarpov', 'spencerSchumann', 'trondEllingsen')
     advanced_ais = (
-            'astar', 'astarDistanceMetric', 'astarFast', 'astarGrid', 'astarJump', 'astarPlanning',
-            'astarPlanningDynamic', 'astarWaypoints', 'astarWindow', 'robinBaumgartenSlim', 'robinBaumgartenSlimImproved',
-            'robinBaumgartenSlimWindowAdvance')
-    selection_ais = ('astar', 'astarPlanningDynamic', 'robinBaumgarten', 'random', 'doNothing')
+        'astar', 'astarDistanceMetric', 'astarFast', 'astarJump', 'astarPlanning',
+        'astarPlanningDynamic', 'astarWindow', 'robinBaumgartenSlim', 'robinBaumgartenSlimImproved',
+        'robinBaumgartenSlimWindowAdvance')
+    # Currently not working , 'astarGrid', 'astarWaypoints'
 
-    selected_ai = StringVar()
+    ai_sel_file = 'ai_selection_strength.txt'
+    with open(ai_sel_file, "r") as f:
+        data = f.read()
+    ais_strength_dict = json.loads(data)
+    # insert 'doNothing', if testing on fine granularity
+
     ai_options_combobox = ttk.Combobox(p_c_frame, textvariable=selected_ai)
-    ai_options_combobox['values'] = base_ais + advanced_ais
+    ai_options_combobox['values'] = list(ais_strength_dict.keys())
     ai_options_combobox['state'] = 'readonly'
     ai_options_combobox.current(0)
 
-    selected_ai = BooleanVar()
+    use_selected_ai = BooleanVar()
+    use_selected_ai.set(True)
+
     def ai_switch():
-        if selected_ai.get():
-            ai_options_combobox['values'] = selection_ais
+        if use_selected_ai.get():
+            ai_options_combobox['values'] = list(ais_strength_dict.keys())
         else:
             ai_options_combobox['values'] = base_ais + advanced_ais
         ai_options_combobox.current(0)
 
-    selected_ai_checkbutton = ttk.Checkbutton(p_c_frame,
-                    text='Use selected AI',
-                    command=ai_switch,
-                    variable=selected_ai)
+    use_selected_ai_checkbutton = ttk.Checkbutton(p_c_frame,
+                                                  text='Use selected AI',
+                                                  command=ai_switch,
+                                                  variable=use_selected_ai)
+    difficulty_frame = ttk.Frame(settings)
+    p_c_tabs.add(difficulty_frame, text="Difficulty Adjustment")
+    iterate_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon,
+                                text='Determine difficulty with ai', state='disabled',
+                                command=lambda: spawn_thread(q, ai_iterate_level))
+    current_difficulty_value = DoubleVar()
+    current_difficulty_label = ttk.Label(difficulty_frame, text="Current Difficulty: Not determined")
+
+    def difficulty_value_changed(t1, t2, t3):
+        current_difficulty_label.config(text="Current Difficulty: " + str(current_difficulty_value.get()))
+
+    current_difficulty_value.trace("w", callback=difficulty_value_changed)
+
+    das_value = IntVar()
+    das_value_label = ttk.Label(difficulty_frame, text=" 0")
+
+    def d_slider_changed(event):
+        das_value.set(round(das_value.get()))
+        das_value_label.config(text=das_value.get())
+
+    das_label = ttk.Label(difficulty_frame, text="Difficulty Adjustment")
+    difficulty_adjustment_slider = ttk.Scale(difficulty_frame, from_=0, to=10, orient='horizontal', variable=das_value,
+                                             command=d_slider_changed)
+    das_value.set(0)
+
+    edit_tab = ttk.Frame(settings)
+
+    def on_tab_change(event):
+        tab = event.widget.tab('current')['text']
+        if tab == 'Edit Mode':
+            editmode.set(True)
+
+    p_c_tabs.bind('<<NotebookTabChanged>>', on_tab_change)
     # Level Preview image
     image_label = ScrollableImage(settings, image=levelimage, height=271)
 
@@ -568,10 +851,13 @@ def TOAD_GUI(marioversion="base"):
         if is_loaded.get():
             play_button.state(['!disabled'])
             play_ai_button.state(['!disabled'])
+            iterate_button.state(['!disabled'])
+
             image_label.change_image(level_obj.image)
         else:
             play_button.state(['disabled'])
             play_ai_button.state(['disabled'])
+            iterate_button.state(['disabled'])
         toggle_editmode(t1, t2, t3)
         return
 
@@ -604,7 +890,7 @@ def TOAD_GUI(marioversion="base"):
     gen_button.grid(column=1, row=4, sticky=(N, S, E, W), padx=5, pady=5)
     save_button.grid(column=2, row=4, sticky=(N, S, E, W), padx=5, pady=5)
     image_label.grid(column=0, row=6, columnspan=4, sticky=(N, E, W), padx=5, pady=8)
-    p_c_frame.grid(column=1, row=7, columnspan=2, sticky=(N, S, E, W), padx=5, pady=5)
+    p_c_tabs.grid(column=1, row=7, columnspan=2, sticky=(N, S, E, W), padx=5, pady=5)
     fpath_label.grid(column=0, row=99, columnspan=4, sticky=(S, E, W), padx=5, pady=5)
     error_label.grid(column=0, row=100, columnspan=4, sticky=(S, E, W), padx=5, pady=1)
     size_frame.grid(column=1, row=5, columnspan=1, sticky=(N, S), padx=5, pady=2)
@@ -616,11 +902,12 @@ def TOAD_GUI(marioversion="base"):
     h_entry.grid(column=3, row=0, sticky=(N, S), padx=1, pady=0)
 
     # On p_c_frame:
-    play_button.grid(column=1, row=0, sticky=(N, S, E, W), padx=5, pady=5)
-    play_ai_button.grid(column=2, row=0, sticky=(N, S, E, W), padx=5, pady=5)
-    controls_frame.grid(column=3, row=0, sticky=(N, S, E, W), padx=5, pady=5)
-    ai_options_combobox.grid(column=2, row=2, sticky=(N, S, E, W), padx=5, pady=5)
-    selected_ai_checkbutton.grid(column=2, row=1, sticky=(N, S, E, W), padx=5, pady=5)
+    play_button.grid(column=0, row=0, rowspan=3, sticky=(N, S, E, W), padx=5, pady=5)
+    play_ai_button.grid(column=1, row=0, rowspan=3, sticky=(N, S, E, W), padx=5, pady=5)
+    controls_frame.grid(column=2, row=0, sticky=(N, S, E, W), padx=5, pady=5)
+    use_selected_ai_checkbutton.grid(column=2, row=1, sticky=(N, S, E, W), padx=5, pady=5)
+    ai_options_combobox.grid(column=2, row=2, columnspan=2, sticky=(N, S, E, W), padx=5, pady=5)
+
     # On controls_frame
     contr_a.grid(column=0, row=0, sticky=(N, S, E), padx=1, pady=1)
     contr_s.grid(column=0, row=1, sticky=(N, S, E), padx=1, pady=1)
@@ -630,6 +917,13 @@ def TOAD_GUI(marioversion="base"):
     descr_s.grid(column=1, row=1, sticky=(N, S, W), padx=1, pady=1)
     descr_l.grid(column=1, row=2, sticky=(N, S, W), padx=1, pady=1)
     descr_r.grid(column=1, row=3, sticky=(N, S, W), padx=1, pady=1)
+
+    # On difficulty_frame
+    iterate_button.grid(column=0, row=0, rowspan=1, sticky=(N, S, E, W), padx=5, pady=5)
+    current_difficulty_label.grid(column=1, row=0, sticky=(N), padx=5, pady=5)
+    das_label.grid(column=0, row=1, sticky=(N, W), padx=5, pady=5)
+    difficulty_adjustment_slider.grid(column=0, row=1, sticky=(N), pady=5)
+    das_value_label.grid(column=0, row=1, sticky=(N, E), padx=5, pady=5)
 
     # Column/Rowconfigure
     root.columnconfigure(0, weight=1)
@@ -647,13 +941,13 @@ def TOAD_GUI(marioversion="base"):
     settings.rowconfigure(5, weight=1)
     settings.rowconfigure(6, weight=2)
     settings.rowconfigure(7, weight=1)
+    settings.rowconfigure(8, weight=1)
     settings.rowconfigure(99, weight=1)
     settings.rowconfigure(100, weight=1)
 
+    p_c_frame.columnconfigure(0, weight=2)
     p_c_frame.columnconfigure(1, weight=2)
-    p_c_frame.columnconfigure(2, weight=1)
-    p_c_frame.columnconfigure(3, weight=0)
-    p_c_frame.rowconfigure(0, weight=1)
+    p_c_frame.columnconfigure(2, weight=2)
 
     controls_frame.columnconfigure(0, weight=1)
     controls_frame.columnconfigure(1, weight=1)
@@ -662,6 +956,9 @@ def TOAD_GUI(marioversion="base"):
     controls_frame.rowconfigure(2, weight=1)
     controls_frame.rowconfigure(3, weight=1)
 
+    difficulty_frame.columnconfigure(0, weight=3)
+    difficulty_frame.columnconfigure(1, weight=1)
+    difficulty_frame.rowconfigure(0, weight=1)
     # ---------------------------------------- Edit Mode ----------------------------------------
 
     # Define Variables
@@ -688,17 +985,15 @@ def TOAD_GUI(marioversion="base"):
 
     # ---------------------------------------- Edit Mode Widgets ----------------------------------------
 
-    # Set Edit mode Checkbox
-    emode_box = ttk.Checkbutton(settings, text="Edit mode", variable=editmode, state='disabled')
-    em_tooltip = Tooltip(emode_box,
+    # Set Edit mode Tab
+    p_c_tabs.add(edit_tab, text="Edit Mode", state='disabled')
+    em_tooltip = Tooltip(edit_tab,
                          text="Right click the image to change a token directly. \n"
                               "Edit mode allows for resampling parts of a generated level.",
                          wraplength=250, bg="white", enabled=True, waittime=100)
-    emode_box.grid(column=1, row=8, columnspan=2, sticky=(N, S, E, W), padx=5, pady=5)
-    settings.rowconfigure(8, weight=1)
 
     # Edit mode frame
-    emode_frame = ttk.LabelFrame(p_c_frame, text="Edit mode controls", padding=(5, 5, 5, 5))
+    emode_frame = ttk.LabelFrame(edit_tab, text="Edit mode controls", padding=(5, 5, 5, 5))
     # Bounding Box frame
     bbox_frame = ttk.LabelFrame(emode_frame, text="Bounding Box", padding=(5, 5, 5, 5))
 
@@ -716,7 +1011,7 @@ def TOAD_GUI(marioversion="base"):
                      "influenced by a change in this scale."
 
     x1_tooltip = Tooltip(x1_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
-    x2_tooltip = Tooltip(x2_label, text=bbox_tt_string,  wraplength=250, bg="white", enabled=False)
+    x2_tooltip = Tooltip(x2_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
     y1_tooltip = Tooltip(y1_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
     y2_tooltip = Tooltip(y2_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
 
@@ -754,7 +1049,7 @@ def TOAD_GUI(marioversion="base"):
     # Resample Button and info
     resample_button = ttk.Button(emode_frame, text="Resample", state='disabled',
                                  command=lambda: spawn_thread(q, re_sample))
-    sample_info = ttk.Label(emode_frame, text=# "Right click to edit Tokens directly.\n"
+    sample_info = ttk.Label(emode_frame, text="Right click to edit Tokens directly.\n"
                                               "Resampling will regenerate the level,\n"
                                               "so prior Token edits will be lost.")
 
@@ -793,17 +1088,14 @@ def TOAD_GUI(marioversion="base"):
     # Grid/Remove Edit mode widgets
     def toggle_editmode(t1, t2, t3):
         if editmode.get():
-            # Grid widgets
-            controls_frame.grid_configure(column=1, row=1)  # move frame to make room
-
-            # On settings:
-            emode_frame.grid(column=0, row=0, rowspan=2, sticky=(E, W), padx=10)
+            # On edit_tab:
+            emode_frame.grid(column=0, row=0, rowspan=3, sticky=(E, W), padx=10)
 
             # On emode_frame:
             bbox_frame.grid(column=0, row=0, columnspan=1, sticky=(E, W), padx=5, pady=5)
             resample_button.grid(column=0, row=5, columnspan=3, sticky=(N, S, E, W), padx=5, pady=5)
             sample_info.grid(column=0, row=4, columnspan=3, sticky=(N, S), padx=5, pady=5)
-            sc_frame.grid(column=1, row=0, columnspan=5, sticky=(N, S, E, W), padx=5, pady=5)
+            sc_frame.grid(column=1, row=0, columnspan=3, sticky=(N, S, E, W), padx=5, pady=5)
             sc_label.grid(column=0, row=0, columnspan=1, sticky=(N, S, E), padx=1, pady=5)
             sc_entry.grid(column=1, row=0, columnspan=1, sticky=(N, S, W), padx=1, pady=5)
             sc_info_label.grid(column=0, row=1, columnspan=2, sticky=(N, S, E, W), padx=1, pady=5)
@@ -842,14 +1134,12 @@ def TOAD_GUI(marioversion="base"):
             sc_frame.rowconfigure(1, weight=1)
             sc_frame.rowconfigure(2, weight=1)
 
-            redraw_image(True, rectangle=[(bbox_y1.get()*16, bbox_x1.get()*16),
-                                          (bbox_y2.get()*16, bbox_x2.get()*16)], scale=edit_scale.get())
+            redraw_image(True, rectangle=[(bbox_y1.get() * 16, bbox_x1.get() * 16),
+                                          (bbox_y2.get() * 16, bbox_x2.get() * 16)], scale=edit_scale.get())
 
             update_scale_info(t1, t2, t3)
 
         else:
-            # Hide widgets
-            controls_frame.grid_configure(column=3, row=0)  # move frame back
             emode_frame.grid_forget()
             redraw_image(False)
 
@@ -868,9 +1158,9 @@ def TOAD_GUI(marioversion="base"):
             if bbox_x2.get() >= len(level_obj.ascii_level):
                 bbox_x2.set(len(level_obj.ascii_level))
             if bbox_y1.get() >= bbox_y2.get():
-                bbox_y1.set(bbox_y2.get()-1)
+                bbox_y1.set(bbox_y2.get() - 1)
             if bbox_x1.get() >= bbox_x2.get():
-                bbox_x1.set(bbox_x2.get()-1)
+                bbox_x1.set(bbox_x2.get() - 1)
 
             redraw_image(True, rectangle=[(bbox_y1.get() * 16, bbox_x1.get() * 16),
                                           (bbox_y2.get() * 16, bbox_x2.get() * 16)], scale=edit_scale.get())
@@ -886,7 +1176,7 @@ def TOAD_GUI(marioversion="base"):
                            (round(bbox_y2.get() * sc), round(bbox_x2.get() * sc))]
 
             # Get first tokens noise map on current scale as representation
-            noise_holder = Image.fromarray(level_obj.noises[edit_scale.get()][0, 0, 3:-3, 3:-3].cpu().numpy()*255)
+            noise_holder = Image.fromarray(level_obj.noises[edit_scale.get()][0, 0, 3:-3, 3:-3].cpu().numpy() * 255)
             noise_holder = noise_holder.convert('RGB')
 
             # Draw adjusted bounding box on noise map

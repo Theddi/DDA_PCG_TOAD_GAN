@@ -602,7 +602,6 @@ def TOAD_GUI():
                 sliceCounter += 1
 
                 # Shifts Slice by an amount of empty only tokens on the left
-
                 for length in range(i+sliceShift+1, levelWidth+1):
                     firstRow = 0
                     for h in range(levelHeight):
@@ -618,7 +617,7 @@ def TOAD_GUI():
                 level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level,
                                                                 i + sliceShift, i + sliceLength - 1 + sliceShift, 'M')
                 level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level,
-                                                                i + sliceShift, i + sliceLength -1 + sliceShift, 'F')
+                                                                i + sliceShift, i + sliceLength - 1 + sliceShift, 'F')
 
                 print("".join(level_obj.ascii_level))
                 print()

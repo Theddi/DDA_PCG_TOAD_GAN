@@ -560,7 +560,7 @@ def TOAD_GUI():
         return mar_fin
 
 
-    def ai_iterate_level(slice=True, clear=True, sliceIts=12, killJava=False):
+    def ai_iterate_level(slice=True, clear=True, sliceIts=12, killJava=True):
         # Set variables
         remGen = use_gen.get()
         is_loaded.set(False)

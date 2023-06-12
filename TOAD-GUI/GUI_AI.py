@@ -608,7 +608,6 @@ def TOAD_GUI():
                     for h in range(levelHeight):
                         if level_obj.ascii_level[h][length-1:length] == '-':
                             firstRow += 1
-                        print(firstRow, level_obj.ascii_level[h][length-1:length])
                     if firstRow == levelHeight:
                         sliceShift += 1
                     else:

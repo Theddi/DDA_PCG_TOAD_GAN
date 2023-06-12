@@ -383,7 +383,7 @@ def TOAD_GUI():
             use_gen.set(False)
 
         # Py4j Java bridge uses Mario AI Framework
-        gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH_NEW, die_on_exit=False,
+        gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH_NEW, die_on_exit=True,
                                              redirect_stdout=sys.stdout,
                                              redirect_stderr=sys.stderr,
                                              javaopts=["-Xms128m", "-Xmx256m"])
@@ -586,19 +586,40 @@ def TOAD_GUI():
 
         # Determines slices by setting Mario and Finish position in level_obj, and iterates those with AI before reset
         if slice:
-            sliceHeight = 16
+            levelHeight = len(level_obj.ascii_level)
+            levelWidth = len(level_obj.ascii_level[0])
 
             # Create and play Base level
-            baselevel = create_base_slice(sliceHeight, sliceLength)
+            baselevel = create_base_slice(levelHeight, sliceLength)
             spawn_thread(q, play_level, "astar", False, standard_agent_time, False, True, baselevel, "base").join()
 
             marfin = delete_mario_finish()
             # Create level slices
-            levelWidth = len(level_obj.ascii_level[0])
+
+            sliceCounter = 0
+            sliceShift = 0
             for i in range(0, levelWidth - sliceLength, sliceIts):
-                name = level_obj.name + "_slice" + "%03d" % int(i / sliceIts)
-                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level, i, i + sliceLength, 'M')
-                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level, i, i + sliceLength, 'F')
+                sliceCounter += 1
+
+                # Shifts Slice by an amount of empty only tokens on the left
+
+                for length in range(i+sliceShift+1, levelWidth+1):
+                    firstRow = 0
+                    for h in range(levelHeight):
+                        if level_obj.ascii_level[h][length-1:length] == '-':
+                            firstRow += 1
+                        print(firstRow, level_obj.ascii_level[h][length-1:length])
+                    if firstRow == levelHeight:
+                        sliceShift += 1
+                    else:
+                        break
+
+                name = level_obj.name + "_slice" + "%03d" % sliceCounter
+
+                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level,
+                                                                i + sliceShift, i + sliceLength - 1 + sliceShift, 'M')
+                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level,
+                                                                i + sliceShift, i + sliceLength -1 + sliceShift, 'F')
 
                 print("".join(level_obj.ascii_level))
                 print()

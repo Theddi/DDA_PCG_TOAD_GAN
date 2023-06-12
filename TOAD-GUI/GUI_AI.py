@@ -383,9 +383,10 @@ def TOAD_GUI():
             use_gen.set(False)
 
         # Py4j Java bridge uses Mario AI Framework
-        gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH_NEW, die_on_exit=True,
+        gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH_NEW, die_on_exit=False,
                                              redirect_stdout=sys.stdout,
-                                             redirect_stderr=sys.stderr)
+                                             redirect_stderr=sys.stderr,
+                                             javaopts=["-Xms128m", "-Xmx256m"])
 
         agent = gateway.jvm.agents.robinBaumgarten.Agent()
         if ai in advanced_ais:
@@ -559,8 +560,7 @@ def TOAD_GUI():
                     level_obj.ascii_level[height] = "".join(tmp_slice)
         return mar_fin
 
-
-    def ai_iterate_level(slice=True, clear=True, sliceIts=12, killJava=True):
+    def ai_iterate_level(slice=True, clear=True, sliceIts=4, sliceLength=24):
         # Set variables
         remGen = use_gen.get()
         is_loaded.set(False)
@@ -586,7 +586,6 @@ def TOAD_GUI():
 
         # Determines slices by setting Mario and Finish position in level_obj, and iterates those with AI before reset
         if slice:
-            sliceLength = sliceIts * 2
             sliceHeight = 16
 
             # Create and play Base level
@@ -601,8 +600,8 @@ def TOAD_GUI():
                 level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level, i, i + sliceLength, 'M')
                 level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level, i, i + sliceLength, 'F')
 
-                #print("".join(level_obj.ascii_level))
-                #print()
+                print("".join(level_obj.ascii_level))
+                print()
                 is_loaded.set(False)
                 for ai in list(ais_strength_dict.keys()):
                     # Play level with agent
@@ -660,10 +659,6 @@ def TOAD_GUI():
 
         error_msg.set("Iterating Finished")
         use_gen.set(remGen)
-        # Jvms happen to not get closed causing RAM problems,
-        # kill them here TODO: make sure jvm instances closing after execution
-        if killJava:
-            os.system("taskkill /f /im  java.exe")
         is_loaded.set(True)
 
     # ---------------------------------------- Layout ----------------------------------------

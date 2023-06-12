@@ -1,6 +1,53 @@
 # Code from https://github.com/Mawiszus/TOAD-GAN
 import numpy as np
 
+# Function to slice Map into multiple parts
+class Mapslicer:
+
+    def __init__(self, level_obj, iterations=12):
+        self.name = level_obj.name
+        self.level_mat = level_obj.ascii_level
+        self.width = iterations * 2
+        self.its = iterations
+
+    '''
+    slice_level slices the level input read by read_level into slices of size "width"
+    Double the amount of slices will be created to better cover the whole map
+    Therefore the level is iterated in "its" steps
+    returns the path to the sliced files
+    '''
+
+    def slice_level(self):
+        levelWidth = len(self.level_mat[0])
+        levelHeight = len(self.level_mat)
+
+        outputpath = OUT + self.name + "_SLICED/"
+        pathExist = os.path.exists(outputpath)
+        if not pathExist:
+            os.makedirs(outputpath)
+
+        # Create base level for time measurement
+        baseLevel = []
+        for h in range(levelHeight):
+            if h < levelHeight-2:
+                baseLevel.append("\n" + "-" * levelWidth if h != 0 else "" + "-" * (self.width-1))
+            else:
+                baseLevel.append("\n" + "X" * levelWidth if h != 0 else "" + "X" * (self.width-1))
+        with open(outputpath + self.name + "_slice_base.txt", 'w') as file:
+            file.writelines(baseLevel)
+
+        # Create level slices
+        for i in range(0, levelWidth - self.width, self.its):
+            levelSlice = []
+            for h in range(levelHeight):
+                number = "%03d" % int(i / self.its)
+                levelSlice.append("\n" + self.level_mat[h][i:i + self.width]
+                                  if h != 0 else "" + self.level_mat[h][i:i + self.width])
+            sliceFileName = self.name + "_slice" + number + ".txt"
+            with open(outputpath + sliceFileName, 'w') as file:
+                file.writelines(levelSlice)
+        return os.path.abspath(outputpath)
+
 
 # Miscellaneous functions to deal with ascii-token-based levels.
 def load_level_from_text(path_to_level_txt):  # , replace_tokens=REPLACE_TOKENS):
@@ -80,6 +127,13 @@ def place_a_mario_token(level):
 
     return level  # Will only be reached if there is no place to put Mario
 
+def get_num_enemies(level):
+    enemies = 0
+    for line in level.ascii_level:
+        enemies += line.count('g')
+        enemies += line.count('k')
+    return enemies
+
 
 def is_token_stuck(level, height, length, begin):
     if level[height+1][length] in solid_tokens \
@@ -88,6 +142,17 @@ def is_token_stuck(level, height, length, begin):
          and (level[height][length-1] in solid_tokens or length == begin):
         return True
     return False
+
+
+def create_base_slice(height, length):
+    # Create base level for time measurement
+    baseLevel = []
+    for h in range(height):
+        if h < height - 2:
+            baseLevel.append("-" * (length - 1) + "\n")
+        else:
+            baseLevel.append("X" * (length - 1) + "\n")
+    return baseLevel
 
 
 def place_token_with_limits(level, begin=None, end=None, token='M'):

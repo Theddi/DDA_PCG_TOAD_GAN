@@ -173,7 +173,7 @@ def place_token_with_limits(level, begin=None, end=None, token='M'):
             if (j < begin if begin else False) or (j > end if end else False):
                 continue
             for i in reversed(range(1, len(level))):
-                if level[i - 1][j] == '-' and level[i][j] in solid_tokens:
+                if level[i - 1][j] == '-':
                     tmp_slice = list(level[i - 1])
                     tmp_slice[j] = 'F'
                     level[i - 1] = "".join(tmp_slice)

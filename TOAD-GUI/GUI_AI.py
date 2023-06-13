@@ -14,16 +14,15 @@ import sys
 
 from utils.scrollable_image import ScrollableImage
 from utils.tooltip import Tooltip
-from utils.level_utils import read_level_from_file, one_hot_to_ascii_level, place_a_mario_token, ascii_to_one_hot_level
+from utils.level_utils import read_level_from_file, one_hot_to_ascii_level, place_a_mario_token, \
+    place_token_with_limits, create_base_slice
 from utils.level_image_gen import LevelImageGen
 from utils.toad_gan_utils import load_trained_pyramid, generate_sample, TOADGAN_obj
 
 from filelock import FileLock
 import shutil
 import json
-import numpy as np
 import pandas as pd
-from IPython.display import display
 
 # PATHS
 CURDIR = os.path.abspath(os.path.curdir)
@@ -92,53 +91,6 @@ class LevelObject:
         self.scales = from_.scales
         self.noises = from_.noises
         self.tokens = from_.tokens
-
-class Mapslicer:
-
-    def __init__(self, level_obj, iterations=28):
-        self.name = level_obj.name
-        self.level_mat = level_obj.ascii_level
-        self.width = iterations * 2
-        self.its = iterations
-
-    '''
-    slice_level slices the level input read by read_level into slices of size "width"
-    Double the amount of slices will be created to better cover the whole map
-    Therefore the level is iterated in "its" steps
-    returns the path to the sliced files
-    '''
-
-    def slice_level(self):
-        levelWidth = len(self.level_mat[0])
-        levelHeight = len(self.level_mat)
-
-        outputpath = OUT + self.name + "_SLICED/"
-        pathExist = os.path.exists(outputpath)
-        if not pathExist:
-            os.makedirs(outputpath)
-
-        # Create base level for time measurement
-        baseLevel = []
-        for h in range(levelHeight):
-            if h < levelHeight-2:
-                baseLevel.append("\n" + "-" * levelWidth if h != 0 else "" + "-" * (self.width-1))
-            else:
-                baseLevel.append("\n" + "X" * levelWidth if h != 0 else "" + "X" * (self.width-1))
-        with open(outputpath + self.name + "_slice_base.txt", 'w') as file:
-            file.writelines(baseLevel)
-
-        # Create level slices
-        for i in range(0, levelWidth - self.width, self.its):
-            levelSlice = []
-            for h in range(levelHeight):
-                number = "%03d" % int(i / self.its)
-                levelSlice.append("\n" + self.level_mat[h][i:i + self.width]
-                                  if h != 0 else "" + self.level_mat[h][i:i + self.width])
-            sliceFileName = self.name + "_slice" + number + ".txt"
-            with open(outputpath + sliceFileName, 'w') as file:
-                file.writelines(levelSlice)
-        return os.path.abspath(outputpath)
-
 
 # Main GUI code
 def TOAD_GUI():
@@ -352,6 +304,7 @@ def TOAD_GUI():
 
             # Generate level
             level_obj.name = genName + "_C" + str(genCounter)
+
             level, scales, noises = generate_sample(toadgan_obj.Gs, toadgan_obj.Zs, toadgan_obj.reals,
                                                     toadgan_obj.NoiseAmp, toadgan_obj.num_layers,
                                                     toadgan_obj.token_list,
@@ -373,11 +326,17 @@ def TOAD_GUI():
         if is_loaded.get():
             # Check if a Mario token exists - if not, we need to place one
             m_exists = False
+            f_exists = False
             for line in level_obj.ascii_level:
                 if 'M' in line:
                     m_exists = True
+                if 'F' in line:
+                    f_exists = True
             if not m_exists:
-                level_obj.ascii_level = place_a_mario_token(level_obj.ascii_level)
+                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level)[0]
+            if not f_exists:
+                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level, token='F')[0]
+
             if use_gen.get():
                 level_obj.tokens = toadgan_obj.token_list
 
@@ -414,14 +373,8 @@ def TOAD_GUI():
             level_obj.image = img
             image_label.change_image(level_obj.image)
 
-    def get_num_enemies():
-        enemies = 0
-        for line in level_obj.ascii_level:
-            enemies += line.count('g')
-            enemies += line.count('k')
-        return enemies
-
-    def play_level(ai_select="Human", loop=False, playtime=30, visuals=True, multicall=False):
+    def play_level(ai_select="Human", loop=False, playtime=30, visuals=True,
+                   multicall=False, baselevel=None, slice_name=level_obj.name):
         ai = ai_select
         if not multicall:
             error_msg.set("Playing level...")
@@ -432,7 +385,8 @@ def TOAD_GUI():
         # Py4j Java bridge uses Mario AI Framework
         gateway = JavaGateway.launch_gateway(classpath=MARIO_AI_PATH_NEW, die_on_exit=True,
                                              redirect_stdout=sys.stdout,
-                                             redirect_stderr=sys.stderr)
+                                             redirect_stderr=sys.stderr,
+                                             javaopts=["-Xms128m", "-Xmx256m"])
 
         agent = gateway.jvm.agents.robinBaumgarten.Agent()
         if ai in advanced_ais:
@@ -492,13 +446,16 @@ def TOAD_GUI():
                 agent = gateway.jvm.agents.human.Agent()
             oneLoop = True
             while loop or oneLoop:
-                result = game.runGame(agent, ''.join(level_obj.ascii_level), playtime, 0, visuals, 30, 2.0)
+                if baselevel:
+                    result = game.runGame(agent, ''.join(baselevel), playtime, 0, visuals, 30, 2.0)
+                else:
+                    result = game.runGame(agent, ''.join(level_obj.ascii_level), playtime, 0, visuals, 30, 2.0)
                 gateway.java_process.kill()
                 perc = int(result.getCompletionPercentage() * 100)
                 current_completion.set(perc)
 
                 maplength = len(level_obj.ascii_level[0]) - 1
-                info_list = [level_obj.name, ai, maplength, perc,
+                info_list = [slice_name, ai, maplength, perc,
                              playtime - (result.getRemainingTime() / 1000), playtime]
 
                 with FileLock(GAME_RESULT_PATH + LOCK_EXT):
@@ -576,51 +533,110 @@ def TOAD_GUI():
             format_str += '\n'
         return format_str
 
-    def ai_iterate_level(slice=True, clear=True, sliceIts=12, killJava=False):
+    def delete_mario_finish():
+        mar_fin = [None, None]
+        for height, line in enumerate(level_obj.ascii_level):
+            for length, tok in enumerate(line):
+                if tok == 'M' or tok == 'F':
+                    tmp_slice = list(level_obj.ascii_level[height])
+                    tmp_slice[length] = '-'
+                    level_obj.ascii_level[height] = "".join(tmp_slice)
+                if tok == 'M':
+                    mar_fin[0] = (height, length)
+                if tok == 'F':
+                    mar_fin[1] = (height, length)
+        return mar_fin
+
+    def set_mario_finish(mar_fin):
+        for height, line in enumerate(level_obj.ascii_level):
+            for length, tok in enumerate(line):
+                if height == mar_fin[0][0] and length == mar_fin[0][1]:
+                    tmp_slice = list(level_obj.ascii_level[height])
+                    tmp_slice[length] = 'M'
+                    level_obj.ascii_level[height] = "".join(tmp_slice)
+                if height == mar_fin[1][0] and length == mar_fin[1][1]:
+                    tmp_slice = list(level_obj.ascii_level[height])
+                    tmp_slice[length] = 'F'
+                    level_obj.ascii_level[height] = "".join(tmp_slice)
+        return mar_fin
+
+    def ai_iterate_level(slice=True, clear=True):
         # Set variables
         remGen = use_gen.get()
         is_loaded.set(False)
         editmode.set(False)
-        current_difficulty_label.config(text="Current Difficulty: determining...")
         threads = []
         standard_agent_time = 10
         error_msg.set("Iterating...")
 
         # Testing full level with strongest ai, to check if it's completable
+        current_difficulty_label.config(text="Current Difficulty: playtesting...")
         testthread = spawn_thread(q, play_level, "astar", False, 30, False, True)
         testthread.join()
 
+        current_difficulty_label.config(text="Current Difficulty: determining...")
         if clear and os.path.isfile(GAME_RESULT_PATH):
             shutil.rmtree(OUT, ignore_errors=True)
 
         if current_completion.get() < 100:
+            current_difficulty_label.config(text="Current Difficulty: Error")
             error_msg.set("Level is not completable!")
             is_loaded.set(True)
             return
 
-        # slicing and execution per mapslice
+        # Determines slices by setting Mario and Finish position in level_obj, and iterates those with AI before reset
+        slices = []  # List of tuples with Mario and Flag position [(Mario, Flag),..] each (row, column) in ascii level
         if slice:
-            level_obj.save(level_obj_tmp)
-            slicer = Mapslicer(level_obj, sliceIts)
-            levelsPath = slicer.slice_level()
-            for level in os.listdir(levelsPath):
-                load_level_by_path(os.path.join(levelsPath, level))
+            levelHeight = len(level_obj.ascii_level)
+            levelWidth = len(level_obj.ascii_level[0])
+            sl = slice_length_var.get()
+
+            # Create and play Base level
+            baselevel = create_base_slice(levelHeight, sl)
+            spawn_thread(q, play_level, "astar", False, standard_agent_time, False, True, baselevel, "base").join()
+
+            marfin = delete_mario_finish()
+            # Create level slices
+
+            sliceCounter = 0
+            sliceShift = 0
+            for i in range(0, levelWidth - sl, slice_its_var.get()):
+                sliceCounter += 1
+
+                # Shifts Slice by an amount of empty only tokens on the left
+                for length in range(i+sliceShift+1, levelWidth+1):
+                    firstRow = 0
+                    for h in range(levelHeight):
+                        if level_obj.ascii_level[h][length-1:length] == '-':
+                            firstRow += 1
+                    if firstRow == levelHeight:
+                        sliceShift += 1
+                    else:
+                        break
+
+                name = level_obj.name + "_slice" + "%03d" % sliceCounter
+
+                level_obj.ascii_level, mariocoord = place_token_with_limits(level_obj.ascii_level,
+                                                                i + sliceShift, i + sl - 1 + sliceShift, 'M')
+                level_obj.ascii_level, flagcoord = place_token_with_limits(level_obj.ascii_level,
+                                                                i + sliceShift, i + sl - 1 + sliceShift, 'F')
+                slices.append((mariocoord, flagcoord))
+
+                print("".join(level_obj.ascii_level))
+                print()
                 is_loaded.set(False)
-                if "base" in level:
-                    threads.append(spawn_thread(q, play_level, "astar", False, standard_agent_time, False, True))
-                else:
-                    for ai in list(ais_strength_dict.keys()):
-                        # Play level with agent
-                        threads.append(
-                            spawn_thread(q, play_level,
-                                         ai, False, 2 if ai == "doNothing" else standard_agent_time, False, True))
+                for ai in list(ais_strength_dict.keys()):
+                    # Play level with agent
+                    threads.append(
+                        spawn_thread(q, play_level,
+                                     ai, False, 2 if ai == "doNothing" else standard_agent_time,
+                                     False, True, None, name))
                 for thread in threads:
                     thread.join()
+                delete_mario_finish()
 
-            level_obj.restore(level_obj_tmp)
+            set_mario_finish(marfin)
             redraw_image()
-            level_l.set(len(level_obj.ascii_level[0]) - 1)
-            level_h.set(len(level_obj.ascii_level))
         else:
             for ai in list(ais_strength_dict.keys()):
                 threads.append(spawn_thread(q, play_level,
@@ -665,10 +681,6 @@ def TOAD_GUI():
 
         error_msg.set("Iterating Finished")
         use_gen.set(remGen)
-        # Jvms happen to not get closed causing RAM problems,
-        # kill them here TODO: make sure jvm instances closing after execution
-        if killJava:
-            os.system("taskkill /f /im  java.exe")
         is_loaded.set(True)
 
     # ---------------------------------------- Layout ----------------------------------------
@@ -782,6 +794,16 @@ def TOAD_GUI():
     iterate_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon,
                                 text='Determine difficulty with ai', state='disabled',
                                 command=lambda: spawn_thread(q, ai_iterate_level))
+    slice_its_var = IntVar()
+    slice_its_var.set(4)
+    slice_its_label = ttk.Label(difficulty_frame, text="Slice Iterations: ")
+    slice_its_entry = ttk.Entry(difficulty_frame, textvariable=slice_its_var, validate="key", width=3, justify='right')
+
+    slice_length_var = IntVar()
+    slice_length_var.set(24)
+    slice_length_label = ttk.Label(difficulty_frame, text="Slice Length: ")
+    slice_length_entry = ttk.Entry(difficulty_frame, textvariable=slice_length_var, validate="key", width=3, justify='right')
+
     current_difficulty_value = DoubleVar()
     current_difficulty_label = ttk.Label(difficulty_frame, text="Current Difficulty: Not determined")
 
@@ -920,7 +942,11 @@ def TOAD_GUI():
 
     # On difficulty_frame
     iterate_button.grid(column=0, row=0, rowspan=1, sticky=(N, S, E, W), padx=5, pady=5)
-    current_difficulty_label.grid(column=1, row=0, sticky=(N), padx=5, pady=5)
+    slice_its_label.grid(column=1, row=0, sticky=(N), padx=5, pady=5)
+    slice_its_entry.grid(column=2, row=0, sticky=(N), padx=5, pady=5)
+    slice_length_label.grid(column=1, row=0, padx=5, pady=5)
+    slice_length_entry.grid(column=2, row=0, padx=5, pady=5)
+    current_difficulty_label.grid(column=1, row=1, sticky=(N), padx=5, pady=5)
     das_label.grid(column=0, row=1, sticky=(N, W), padx=5, pady=5)
     difficulty_adjustment_slider.grid(column=0, row=1, sticky=(N), pady=5)
     das_value_label.grid(column=0, row=1, sticky=(N, E), padx=5, pady=5)
@@ -1014,6 +1040,11 @@ def TOAD_GUI():
     x2_tooltip = Tooltip(x2_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
     y1_tooltip = Tooltip(y1_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
     y2_tooltip = Tooltip(y2_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
+
+    # Difficulty Adjustment TT
+    slice_its_tt_string = "Lower number results in more shifts and therefore longer runtime"
+
+    slice_its_tt = Tooltip(slice_its_label, text=slice_its_tt_string, wraplength=250, bg="white")
 
     # Scale entry and
     sc_frame = ttk.Frame(emode_frame, padding=(0, 5, 0, 5))

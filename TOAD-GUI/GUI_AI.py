@@ -333,9 +333,9 @@ def TOAD_GUI():
                 if 'F' in line:
                     f_exists = True
             if not m_exists:
-                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level)
+                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level)[0]
             if not f_exists:
-                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level, token='F')
+                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level, token='F')[0]
 
             if use_gen.get():
                 level_obj.tokens = toadgan_obj.token_list
@@ -560,7 +560,7 @@ def TOAD_GUI():
                     level_obj.ascii_level[height] = "".join(tmp_slice)
         return mar_fin
 
-    def ai_iterate_level(slice=True, clear=True, sliceIts=4, sliceLength=24):
+    def ai_iterate_level(slice=True, clear=True):
         # Set variables
         remGen = use_gen.get()
         is_loaded.set(False)
@@ -585,12 +585,14 @@ def TOAD_GUI():
             return
 
         # Determines slices by setting Mario and Finish position in level_obj, and iterates those with AI before reset
+        slices = []  # List of tuples with Mario and Flag position [(Mario, Flag),..] each (row, column) in ascii level
         if slice:
             levelHeight = len(level_obj.ascii_level)
             levelWidth = len(level_obj.ascii_level[0])
+            sl = slice_length_var.get()
 
             # Create and play Base level
-            baselevel = create_base_slice(levelHeight, sliceLength)
+            baselevel = create_base_slice(levelHeight, sl)
             spawn_thread(q, play_level, "astar", False, standard_agent_time, False, True, baselevel, "base").join()
 
             marfin = delete_mario_finish()
@@ -598,7 +600,7 @@ def TOAD_GUI():
 
             sliceCounter = 0
             sliceShift = 0
-            for i in range(0, levelWidth - sliceLength, sliceIts):
+            for i in range(0, levelWidth - sl, slice_its_var.get()):
                 sliceCounter += 1
 
                 # Shifts Slice by an amount of empty only tokens on the left
@@ -614,10 +616,11 @@ def TOAD_GUI():
 
                 name = level_obj.name + "_slice" + "%03d" % sliceCounter
 
-                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level,
-                                                                i + sliceShift, i + sliceLength - 1 + sliceShift, 'M')
-                level_obj.ascii_level = place_token_with_limits(level_obj.ascii_level,
-                                                                i + sliceShift, i + sliceLength - 1 + sliceShift, 'F')
+                level_obj.ascii_level, mariocoord = place_token_with_limits(level_obj.ascii_level,
+                                                                i + sliceShift, i + sl - 1 + sliceShift, 'M')
+                level_obj.ascii_level, flagcoord = place_token_with_limits(level_obj.ascii_level,
+                                                                i + sliceShift, i + sl - 1 + sliceShift, 'F')
+                slices.append((mariocoord, flagcoord))
 
                 print("".join(level_obj.ascii_level))
                 print()
@@ -791,6 +794,16 @@ def TOAD_GUI():
     iterate_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon,
                                 text='Determine difficulty with ai', state='disabled',
                                 command=lambda: spawn_thread(q, ai_iterate_level))
+    slice_its_var = IntVar()
+    slice_its_var.set(4)
+    slice_its_label = ttk.Label(difficulty_frame, text="Slice Iterations: ")
+    slice_its_entry = ttk.Entry(difficulty_frame, textvariable=slice_its_var, validate="key", width=3, justify='right')
+
+    slice_length_var = IntVar()
+    slice_length_var.set(24)
+    slice_length_label = ttk.Label(difficulty_frame, text="Slice Length: ")
+    slice_length_entry = ttk.Entry(difficulty_frame, textvariable=slice_length_var, validate="key", width=3, justify='right')
+
     current_difficulty_value = DoubleVar()
     current_difficulty_label = ttk.Label(difficulty_frame, text="Current Difficulty: Not determined")
 
@@ -929,7 +942,11 @@ def TOAD_GUI():
 
     # On difficulty_frame
     iterate_button.grid(column=0, row=0, rowspan=1, sticky=(N, S, E, W), padx=5, pady=5)
-    current_difficulty_label.grid(column=1, row=0, sticky=(N), padx=5, pady=5)
+    slice_its_label.grid(column=1, row=0, sticky=(N), padx=5, pady=5)
+    slice_its_entry.grid(column=2, row=0, sticky=(N), padx=5, pady=5)
+    slice_length_label.grid(column=1, row=0, padx=5, pady=5)
+    slice_length_entry.grid(column=2, row=0, padx=5, pady=5)
+    current_difficulty_label.grid(column=1, row=1, sticky=(N), padx=5, pady=5)
     das_label.grid(column=0, row=1, sticky=(N, W), padx=5, pady=5)
     difficulty_adjustment_slider.grid(column=0, row=1, sticky=(N), pady=5)
     das_value_label.grid(column=0, row=1, sticky=(N, E), padx=5, pady=5)
@@ -1023,6 +1040,11 @@ def TOAD_GUI():
     x2_tooltip = Tooltip(x2_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
     y1_tooltip = Tooltip(y1_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
     y2_tooltip = Tooltip(y2_label, text=bbox_tt_string, wraplength=250, bg="white", enabled=False)
+
+    # Difficulty Adjustment TT
+    slice_its_tt_string = "Lower number results in more shifts and therefore longer runtime"
+
+    slice_its_tt = Tooltip(slice_its_label, text=slice_its_tt_string, wraplength=250, bg="white")
 
     # Scale entry and
     sc_frame = ttk.Frame(emode_frame, padding=(0, 5, 0, 5))

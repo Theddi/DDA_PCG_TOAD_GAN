@@ -166,7 +166,7 @@ def place_token_with_limits(level, begin=None, end=None, token='M'):
                     tmp_slice = list(level[i - 1])
                     tmp_slice[j] = 'M'
                     level[i - 1] = "".join(tmp_slice)
-                    return level
+                    return level, (i - 1, j)
     elif token == 'F':
         # Check for last possible location from lower right
         for j in reversed(range(len(level[-1]))):
@@ -177,5 +177,5 @@ def place_token_with_limits(level, begin=None, end=None, token='M'):
                     tmp_slice = list(level[i - 1])
                     tmp_slice[j] = 'F'
                     level[i - 1] = "".join(tmp_slice)
-                    return level
-    return level
+                    return level, (i - 1, j)
+    return level, None

@@ -23,6 +23,7 @@ from filelock import FileLock
 import shutil
 import json
 import pandas as pd
+import numpy as np
 
 # PATHS
 CURDIR = os.path.abspath(os.path.curdir)
@@ -455,7 +456,7 @@ def TOAD_GUI():
                 current_completion.set(perc)
 
                 maplength = len(level_obj.ascii_level[0]) - 1
-                info_list = [slice_name, ai, maplength, perc,
+                info_list = [slice_name, ai, maplength, result.getCompletionPercentage(),
                              playtime - (result.getRemainingTime() / 1000), playtime]
 
                 with FileLock(GAME_RESULT_PATH + LOCK_EXT):
@@ -492,24 +493,28 @@ def TOAD_GUI():
 
         # Get base time and remove baselevel result
         base_time = resultDataframe.loc[resultDataframe['file_name'].str.contains("base"), 'time_needed'].iloc[0]
+        base_length = resultDataframe.loc[resultDataframe['file_name'].str.contains("base"), 'map_length'].iloc[0]
         resultDataframe = resultDataframe.drop(resultDataframe[resultDataframe['file_name'].str.contains("base")].index)
 
         new_dataframe = pd.DataFrame()
         grouped = resultDataframe.groupby('file_name')
         for name, group in grouped:
             # Check if random ai can complete slice and remove result
-            randComp = group.loc[group['agent'] == 'random', 'completion_percentage'].iloc[0] == 100
+            randPerc = group.loc[group['agent'] == 'random', 'completion_percentage'].iloc[0]
             group = group.drop(group[group['agent'] == 'random'].index)
 
             # Completion modifier, penalty on less comletion due to square
-            completion_multiplier = 0.5 if randComp else 1
-            group['completion_factor'] = (100 / group['completion_percentage']) * completion_multiplier
+            x = [1/base_length, 1.0]
+            y = [1, 0.5]
+            completion_multiplier = np.interp(randPerc, x, y)**2
+            print(randPerc, completion_multiplier)
+            group['completion_factor'] = (1.0 / group['completion_percentage']) * completion_multiplier
 
             # Strength of ai with modifier, took out of consideration due to double effect with time
             #group['ai_strength'] = beta_ai * group['agent'].apply(lambda val: ais_strength_dict[val])
 
             # Difficulty completion dependent on completion rate, ai strength and time
-            group['difficulty_score'] = 2 * group['completion_factor'] * (group['time_needed'] / base_time)**1.5
+            group['difficulty_score'] = group['completion_factor'] * (group['time_needed'] / base_time)**1.5
 
             new_dataframe = pd.concat([new_dataframe, group])
 

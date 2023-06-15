@@ -455,8 +455,7 @@ def TOAD_GUI():
                 perc = int(result.getCompletionPercentage() * 100)
                 current_completion.set(perc)
 
-                maplength = len(level_obj.ascii_level[0]) - 1
-                info_list = [slice_name, ai, maplength, result.getCompletionPercentage(),
+                info_list = [slice_name, ai, result.getCompletionPercentage(),
                              playtime - (result.getRemainingTime() / 1000), playtime]
 
                 with FileLock(GAME_RESULT_PATH + LOCK_EXT):
@@ -493,7 +492,6 @@ def TOAD_GUI():
 
         # Get base time and remove baselevel result
         base_time = resultDataframe.loc[resultDataframe['file_name'].str.contains("base"), 'time_needed'].iloc[0]
-        base_length = resultDataframe.loc[resultDataframe['file_name'].str.contains("base"), 'map_length'].iloc[0]
         resultDataframe = resultDataframe.drop(resultDataframe[resultDataframe['file_name'].str.contains("base")].index)
 
         new_dataframe = pd.DataFrame()
@@ -503,11 +501,10 @@ def TOAD_GUI():
             randPerc = group.loc[group['agent'] == 'random', 'completion_percentage'].iloc[0]
             group = group.drop(group[group['agent'] == 'random'].index)
 
-            # Completion modifier, penalty on less comletion due to square
-            x = [1/base_length, 1.0]
+            # Completion modifier, penalty on less comletion due to exponent
+            x = [1/slice_length_var.get(), 1.0]  # Minimum completion of 1 Token
             y = [1, 0.5]
             completion_multiplier = np.interp(randPerc, x, y)**2
-            print(randPerc, completion_multiplier)
             group['completion_factor'] = (1.0 / group['completion_percentage']) * completion_multiplier
 
             # Strength of ai with modifier, took out of consideration due to double effect with time

@@ -602,7 +602,10 @@ def TOAD_GUI():
 
             sliceCounter = 0
             sliceShift = 0
-            for i in range(0, levelWidth - sl, slice_its_var.get()):
+            maxMario = levelWidth - sl
+            for i in range(0, maxMario, slice_its_var.get()):
+                if i + sliceShift >= maxMario:
+                    break
                 sliceCounter += 1
 
                 # Shifts Slice by an amount of empty only tokens on the left
@@ -620,12 +623,17 @@ def TOAD_GUI():
 
                 level_obj.ascii_level, mariocoord = place_token_with_limits(level_obj.ascii_level,
                                                                 i + sliceShift, i + sl - 1 + sliceShift, 'M')
+                if mariocoord[1] > (i + sliceShift):
+                    sliceShift += mariocoord[1] - (i + sliceShift)
+
                 level_obj.ascii_level, flagcoord = place_token_with_limits(level_obj.ascii_level,
                                                                 i + sliceShift, i + sl - 1 + sliceShift, 'F')
                 slices.append((mariocoord, flagcoord))
 
-                print("".join(level_obj.ascii_level))
-                print()
+                if flagcoord[1]-mariocoord[1]+1 != slice_length_var.get():
+                    print(flagcoord[1]-mariocoord[1]+1)
+                    print("".join(level_obj.ascii_level))
+
                 is_loaded.set(False)
                 for ai in list(ais_strength_dict.keys()):
                     # Play level with agent
@@ -656,7 +664,7 @@ def TOAD_GUI():
 
         # Results into dataframe
         # column descriptions for pandas dataframe
-        result_columns = ["file_name", "agent", "map_length", "completion_percentage", "time_needed", "total_time"]
+        result_columns = ["file_name", "agent", "completion_percentage", "time_needed", "total_time"]
         # Appends "completion_factor", "ai_strength", "difficulty_score"
         result_dataframe = pd.DataFrame(results, columns=result_columns)
 

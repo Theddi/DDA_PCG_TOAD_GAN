@@ -23,6 +23,7 @@ from filelock import FileLock
 import shutil
 import json
 import pandas as pd
+import numpy as np
 
 # PATHS
 CURDIR = os.path.abspath(os.path.curdir)
@@ -454,8 +455,7 @@ def TOAD_GUI():
                 perc = int(result.getCompletionPercentage() * 100)
                 current_completion.set(perc)
 
-                maplength = len(level_obj.ascii_level[0]) - 1
-                info_list = [slice_name, ai, maplength, perc,
+                info_list = [slice_name, ai, result.getCompletionPercentage(),
                              playtime - (result.getRemainingTime() / 1000), playtime]
 
                 with FileLock(GAME_RESULT_PATH + LOCK_EXT):
@@ -489,7 +489,7 @@ def TOAD_GUI():
     def get_difficulty(resultDataframe):
         alpha_t = 1.0
         beta_ai = 1.0
-
+        min_completion = 1/slice_length_var.get()
         # Get base time and remove baselevel result
         base_time = resultDataframe.loc[resultDataframe['file_name'].str.contains("base"), 'time_needed'].iloc[0]
         resultDataframe = resultDataframe.drop(resultDataframe[resultDataframe['file_name'].str.contains("base")].index)
@@ -498,18 +498,18 @@ def TOAD_GUI():
         grouped = resultDataframe.groupby('file_name')
         for name, group in grouped:
             # Check if random ai can complete slice and remove result
-            randComp = group.loc[group['agent'] == 'random', 'completion_percentage'].iloc[0] == 100
+            randPerc = group.loc[group['agent'] == 'random', 'completion_percentage'].iloc[0]
             group = group.drop(group[group['agent'] == 'random'].index)
 
-            # Completion modifier, penalty on less comletion due to square
-            completion_multiplier = 0.5 if randComp else 1
-            group['completion_factor'] = (100 / group['completion_percentage']) * completion_multiplier
+            # Completion modifier, penalty on less comletion due to exponent
+            x = [min_completion, 1.0]  # Minimum completion of 1 Token
+            y = [1, 0.5]
+            completion_multiplier = np.interp(randPerc, x, y)**2
+            group['completion_factor'] = (1.0 + min_completion - group['completion_percentage']) * completion_multiplier
+            group['time_factor'] = group['time_needed'] / group['total_time']
 
-            # Strength of ai with modifier, took out of consideration due to double effect with time
-            #group['ai_strength'] = beta_ai * group['agent'].apply(lambda val: ais_strength_dict[val])
-
-            # Difficulty completion dependent on completion rate, ai strength and time
-            group['difficulty_score'] = 2 * group['completion_factor'] * (group['time_needed'] / base_time)**1.5
+            # Difficulty completion dependent on completion rate and time
+            group['difficulty_score'] = group['completion_factor'] + group['time_factor']
 
             new_dataframe = pd.concat([new_dataframe, group])
 
@@ -560,7 +560,7 @@ def TOAD_GUI():
                     level_obj.ascii_level[height] = "".join(tmp_slice)
         return mar_fin
 
-    def ai_iterate_level(slice=True, clear=True):
+    def ai_iterate_level(clear=True):
         # Set variables
         remGen = use_gen.get()
         is_loaded.set(False)
@@ -586,63 +586,70 @@ def TOAD_GUI():
 
         # Determines slices by setting Mario and Finish position in level_obj, and iterates those with AI before reset
         slices = []  # List of tuples with Mario and Flag position [(Mario, Flag),..] each (row, column) in ascii level
-        if slice:
-            levelHeight = len(level_obj.ascii_level)
-            levelWidth = len(level_obj.ascii_level[0])
-            sl = slice_length_var.get()
+        levelHeight = len(level_obj.ascii_level)
+        levelWidth = len(level_obj.ascii_level[0])
+        sl = slice_length_var.get()
 
-            # Create and play Base level
-            baselevel = create_base_slice(levelHeight, sl)
-            spawn_thread(q, play_level, "astar", False, standard_agent_time, False, True, baselevel, "base").join()
+        # Create and play Base level
+        baselevel = create_base_slice(levelHeight, sl)
+        spawn_thread(q, play_level, "astar", False, standard_agent_time, False, True, baselevel, "base").join()
 
-            marfin = delete_mario_finish()
-            # Create level slices
+        # Take original Mario and Finish position out of level
+        marfin = delete_mario_finish()
 
-            sliceCounter = 0
-            sliceShift = 0
-            for i in range(0, levelWidth - sl, slice_its_var.get()):
-                sliceCounter += 1
+        # Determine and play level slices
+        sliceCounter = 0
+        sliceShift = 0
+        maxMario = levelWidth - sl
+        for i in range(0, maxMario, slice_its_var.get()):
+            # Abort when full slice length cannot be reached
+            if i + sliceShift >= maxMario:
+                break
+            sliceCounter += 1
 
-                # Shifts Slice by an amount of empty only tokens on the left
-                for length in range(i+sliceShift+1, levelWidth+1):
-                    firstRow = 0
-                    for h in range(levelHeight):
-                        if level_obj.ascii_level[h][length-1:length] == '-':
-                            firstRow += 1
-                    if firstRow == levelHeight:
-                        sliceShift += 1
-                    else:
-                        break
+            # Shifts Slice by an amount of empty only tokens on the left
+            for length in range(i+sliceShift+1, levelWidth+1):
+                firstRow = 0
+                for h in range(levelHeight):
+                    if level_obj.ascii_level[h][length-1:length] == '-':
+                        firstRow += 1
+                if firstRow == levelHeight:
+                    sliceShift += 1
+                else:
+                    break
 
-                name = level_obj.name + "_slice" + "%03d" % sliceCounter
+            # Place Mario token for slice
+            level_obj.ascii_level, mariocoord = place_token_with_limits(level_obj.ascii_level,
+                                                            i + sliceShift, i + sl - 1 + sliceShift, 'M')
+            # Add shift if Mario token could not be placed at current slice beginning
+            if mariocoord[1] > (i + sliceShift):
+                sliceShift += mariocoord[1] - (i + sliceShift)
 
-                level_obj.ascii_level, mariocoord = place_token_with_limits(level_obj.ascii_level,
-                                                                i + sliceShift, i + sl - 1 + sliceShift, 'M')
-                level_obj.ascii_level, flagcoord = place_token_with_limits(level_obj.ascii_level,
-                                                                i + sliceShift, i + sl - 1 + sliceShift, 'F')
-                slices.append((mariocoord, flagcoord))
+            # Place Finish token for slice
+            level_obj.ascii_level, flagcoord = place_token_with_limits(level_obj.ascii_level,
+                                                            i + sliceShift, i + sl - 1 + sliceShift, 'F')
+            slices.append((mariocoord, flagcoord))  # Safe slice borders
 
-                print("".join(level_obj.ascii_level))
-                print()
-                is_loaded.set(False)
-                for ai in list(ais_strength_dict.keys()):
-                    # Play level with agent
-                    threads.append(
-                        spawn_thread(q, play_level,
-                                     ai, False, 2 if ai == "doNothing" else standard_agent_time,
-                                     False, True, None, name))
-                for thread in threads:
-                    thread.join()
-                delete_mario_finish()
+            if flagcoord[1]-mariocoord[1]+1 != slice_length_var.get():
+                s = "Current length %s is not full slice length %s", \
+                    str(flagcoord[1]-mariocoord[1]+1), slice_length_var.get()
+                error_msg.set(s)
+                print(s)
+                print(level_obj.ascii_level)
 
-            set_mario_finish(marfin)
-            redraw_image()
-        else:
+            slicenumber = "%03d" % sliceCounter
+            is_loaded.set(False)
             for ai in list(ais_strength_dict.keys()):
-                threads.append(spawn_thread(q, play_level,
-                                            ai, False, 2 if ai == "doNothing" else standard_agent_time, True, True))
+                # Play level with agent
+                threads.append(
+                    spawn_thread(q, play_level, ai, False, standard_agent_time, False, True, None, slicenumber))
             for thread in threads:
                 thread.join()
+            delete_mario_finish()
+
+        # Reset to original Mario and Finish tokens
+        set_mario_finish(marfin)
+        redraw_image()
 
         # read results from file
         results = []
@@ -654,7 +661,7 @@ def TOAD_GUI():
 
         # Results into dataframe
         # column descriptions for pandas dataframe
-        result_columns = ["file_name", "agent", "map_length", "completion_percentage", "time_needed", "total_time"]
+        result_columns = ["file_name", "agent", "completion_percentage", "time_needed", "total_time"]
         # Appends "completion_factor", "ai_strength", "difficulty_score"
         result_dataframe = pd.DataFrame(results, columns=result_columns)
 
@@ -667,9 +674,6 @@ def TOAD_GUI():
 
         # Get level difficulty by slice average
         level_difficulty = slice_difficulty_df[['difficulty_score']].mean()[0]
-        as_list = slice_difficulty_df.index.tolist()
-        as_list = [x[-3:] for x in as_list]
-        slice_difficulty_df.index = as_list
         slice_difficulty_df = pd.concat([slice_difficulty_df,
                                          pd.DataFrame([{'difficulty_score': level_difficulty}],
                                                       index = ['Full'], columns = slice_difficulty_df.columns)])

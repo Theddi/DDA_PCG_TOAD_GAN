@@ -489,7 +489,7 @@ def TOAD_GUI():
     def get_difficulty(resultDataframe):
         alpha_t = 1.0
         beta_ai = 1.0
-
+        min_completion = 1/slice_length_var.get()
         # Get base time and remove baselevel result
         base_time = resultDataframe.loc[resultDataframe['file_name'].str.contains("base"), 'time_needed'].iloc[0]
         resultDataframe = resultDataframe.drop(resultDataframe[resultDataframe['file_name'].str.contains("base")].index)
@@ -502,16 +502,14 @@ def TOAD_GUI():
             group = group.drop(group[group['agent'] == 'random'].index)
 
             # Completion modifier, penalty on less comletion due to exponent
-            x = [1/slice_length_var.get(), 1.0]  # Minimum completion of 1 Token
+            x = [min_completion, 1.0]  # Minimum completion of 1 Token
             y = [1, 0.5]
             completion_multiplier = np.interp(randPerc, x, y)**2
-            group['completion_factor'] = (1.0 / group['completion_percentage']) * completion_multiplier
+            group['completion_factor'] = (1.0 + min_completion - group['completion_percentage']) * completion_multiplier
+            group['time_factor'] = group['time_needed'] / group['total_time']
 
-            # Strength of ai with modifier, took out of consideration due to double effect with time
-            #group['ai_strength'] = beta_ai * group['agent'].apply(lambda val: ais_strength_dict[val])
-
-            # Difficulty completion dependent on completion rate, ai strength and time
-            group['difficulty_score'] = group['completion_factor'] * (group['time_needed'] / base_time)**1.5
+            # Difficulty completion dependent on completion rate and time
+            group['difficulty_score'] = group['completion_factor'] + group['time_factor']
 
             new_dataframe = pd.concat([new_dataframe, group])
 
@@ -633,10 +631,11 @@ def TOAD_GUI():
             slices.append((mariocoord, flagcoord))  # Safe slice borders
 
             if flagcoord[1]-mariocoord[1]+1 != slice_length_var.get():
-                error_msg.set("Current length %s is not full slice length %s",
-                              str(flagcoord[1]-mariocoord[1]+1), slice_length_var.get())
-                print("Current length %s is not full slice length %s",
-                      str(flagcoord[1]-mariocoord[1]+1), slice_length_var.get())
+                s = "Current length %s is not full slice length %s", \
+                    str(flagcoord[1]-mariocoord[1]+1), slice_length_var.get()
+                error_msg.set(s)
+                print(s)
+                print(level_obj.ascii_level)
 
             slicenumber = "%03d" % sliceCounter
             is_loaded.set(False)

@@ -639,7 +639,7 @@ def TOAD_GUI():
 
             slicenumber = "%03d" % sliceCounter
             is_loaded.set(False)
-            for ai in list(ais_strength_dict.keys()):
+            for ai in ai_sel_list:
                 # Play level with agent
                 threads.append(
                     spawn_thread(q, play_level, ai, False, standard_agent_time, False, True, None, slicenumber))
@@ -768,14 +768,10 @@ def TOAD_GUI():
         'robinBaumgartenSlimWindowAdvance')
     # Currently not working , 'astarGrid', 'astarWaypoints'
 
-    ai_sel_file = 'ai_selection_strength.txt'
-    with open(ai_sel_file, "r") as f:
-        data = f.read()
-    ais_strength_dict = json.loads(data)
-    # insert 'doNothing', if testing on fine granularity
+    ai_sel_list = ["astar", "astarPlanningDynamic", "robinBaumgarten", "random"]
 
     ai_options_combobox = ttk.Combobox(p_c_frame, textvariable=selected_ai)
-    ai_options_combobox['values'] = list(ais_strength_dict.keys())
+    ai_options_combobox['values'] = ai_sel_list
     ai_options_combobox['state'] = 'readonly'
     ai_options_combobox.current(0)
 
@@ -784,7 +780,7 @@ def TOAD_GUI():
 
     def ai_switch():
         if use_selected_ai.get():
-            ai_options_combobox['values'] = list(ais_strength_dict.keys())
+            ai_options_combobox['values'] = ai_sel_list
         else:
             ai_options_combobox['values'] = base_ais + advanced_ais
         ai_options_combobox.current(0)

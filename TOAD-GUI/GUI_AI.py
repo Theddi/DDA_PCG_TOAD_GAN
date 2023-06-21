@@ -481,6 +481,7 @@ def TOAD_GUI():
         finally:
             gateway.java_process.kill()
             gateway.close()
+            gateway.shutdown()
 
         if not multicall:
             is_loaded.set(True)
@@ -561,7 +562,7 @@ def TOAD_GUI():
                     level_obj.ascii_level[height] = "".join(tmp_slice)
         return mar_fin
 
-    def ai_iterate_level(clear=True):
+    def ai_iterate_level(clear="all"):
         # Set variables
         remGen = use_gen.get()
         is_loaded.set(False)
@@ -577,8 +578,11 @@ def TOAD_GUI():
         testthread.join()
 
         current_difficulty_label.config(text="Current Difficulty: determining...")
-        if clear and os.path.isfile(GAME_RESULT_PATH):
+        if clear == "all" and os.path.isfile(GAME_RESULT_PATH):
             shutil.rmtree(OUT, ignore_errors=True)
+        if clear == "results" and os.path.isfile(GAME_RESULT_PATH):
+            f = open(GAME_RESULT_PATH, 'r+')
+            f.truncate(0)  # need '0' when using r+
 
         if current_completion.get() < 100:
             current_difficulty_label.config(text="Current Difficulty: Error")
@@ -690,6 +694,33 @@ def TOAD_GUI():
         use_gen.set(remGen)
         is_loaded.set(True)
 
+        return slice_difficulty_df, slices
+
+    def save_slice(bounds, folder=OUT, name="slice"):
+        slice_ascii = []
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+        for row in level_obj.ascii_level:
+            slice_ascii.append(row[bounds[0]:bounds[1]])
+        slice_file = open(os.path.join(folder, name+".txt"), 'w')
+        slice_file.write("\n".join(slice_ascii))
+        slice_file.close()
+
+    def diff_slice_folder():
+        d = fd.askdirectory(initialdir=CURDIR)
+        levels = [os.path.join(d, f) for f in os.listdir(d) if f[-3:] == "txt"]
+        for l in levels:
+            load_level_by_path(l)
+            dataframe, slice_boundaries = ai_iterate_level("results")
+            for idx in dataframe.index:
+                if idx.isnumeric():
+                    # Gets x boundaries of slice
+                    bounds = slice_boundaries[int(idx)-1][0][1], slice_boundaries[int(idx)-1][1][1]
+                    # Safe folder for slice of difficulty: 0.2521 -> 025/ ; 1.7986 -> 179/
+                    diff_folder = "%03d/" % math.floor(dataframe['difficulty_score'].loc[idx] * 100)
+                    save_slice(bounds, os.path.join(OUT, diff_folder), level_obj.name + "_" + idx)
+            os.system("taskkill /f /im  java.exe")
     # ---------------------------------------- Layout ----------------------------------------
 
     settings = ttk.Frame(root, padding=(15, 15, 15, 15), width=1000, height=1000)  # Main Frame
@@ -828,6 +859,8 @@ def TOAD_GUI():
 
     da_progressbar = tkinter.ttk.Progressbar(difficulty_frame, orient='horizontal', mode='determinate', length=800)
 
+    uni_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon,
+                                text='Universal', command=lambda: spawn_thread(q, diff_slice_folder))
 
     edit_tab = ttk.Frame(settings)
     def on_tab_change(event):
@@ -955,6 +988,7 @@ def TOAD_GUI():
     das_value_entry.grid(column=5, row=0, sticky=(N), padx=5, pady=5)
     difficulty_adjustment_slider.grid(column=4, row=0, columnspan=3, pady=5)
     da_progressbar.grid(column=0, row=1, columnspan=6, sticky=(S), padx=5, pady=5)
+    uni_button.grid(column=5, row=1, sticky=(N))
 
     # Column/Rowconfigure
     root.columnconfigure(0, weight=1)

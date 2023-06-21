@@ -133,6 +133,7 @@ def TOAD_GUI():
     play_level_icon = ImageTk.PhotoImage(Image.open('icons/play_button.png'))
     play_ai_level_icon = ImageTk.PhotoImage(Image.open('icons/play_ai_button.png'))
     iterate_level_icon = ImageTk.PhotoImage(Image.open('icons/iterate_button.png'))
+    extract_slices_icon = ImageTk.PhotoImage(Image.open('icons/extract_slices.png'))
     save_level_icon = ImageTk.PhotoImage(Image.open('icons/save_button.png'))
 
     root.iconphoto(False, toad_icon)
@@ -452,7 +453,7 @@ def TOAD_GUI():
                     result = game.runGame(agent, ''.join(baselevel), playtime, 0, visuals, 30, 2.0)
                 else:
                     result = game.runGame(agent, ''.join(level_obj.ascii_level), playtime, 0, visuals, 30, 2.0)
-                gateway.java_process.kill()
+
                 perc = int(result.getCompletionPercentage() * 100)
                 current_completion.set(perc)
 
@@ -479,13 +480,14 @@ def TOAD_GUI():
                 error_msg.set("Iterating: Level Play was interrupted.")
 
         finally:
-            gateway.java_process.kill()
-            gateway.close()
-            gateway.shutdown()
+            pid = gateway.java_process.pid
 
-        if not multicall:
-            is_loaded.set(True)
-            use_gen.set(remember_use_gen)  # only set use_gen to True if it was previously
+            gateway.shutdown()
+            os.system("taskkill /f /pid %d /t" % pid)
+
+            if not multicall:
+                is_loaded.set(True)
+                use_gen.set(remember_use_gen)  # only set use_gen to True if it was previously
         return
 
     def get_difficulty(resultDataframe):
@@ -574,7 +576,7 @@ def TOAD_GUI():
 
         # Testing full level with strongest ai, to check if it's completable
         current_difficulty_label.config(text="Current Difficulty: playtesting...")
-        testthread = spawn_thread(q, play_level, "astar", False, 30, False, True)
+        testthread = spawn_thread(q, play_level, "astar", False, 30, True, True)
         testthread.join()
 
         current_difficulty_label.config(text="Current Difficulty: determining...")
@@ -720,7 +722,6 @@ def TOAD_GUI():
                     # Safe folder for slice of difficulty: 0.2521 -> 025/ ; 1.7986 -> 179/
                     diff_folder = "%03d/" % math.floor(dataframe['difficulty_score'].loc[idx] * 100)
                     save_slice(bounds, os.path.join(OUT, diff_folder), level_obj.name + "_" + idx)
-            os.system("taskkill /f /im  java.exe")
     # ---------------------------------------- Layout ----------------------------------------
 
     settings = ttk.Frame(root, padding=(15, 15, 15, 15), width=1000, height=1000)  # Main Frame
@@ -859,8 +860,8 @@ def TOAD_GUI():
 
     da_progressbar = tkinter.ttk.Progressbar(difficulty_frame, orient='horizontal', mode='determinate', length=800)
 
-    uni_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon,
-                                text='Universal', command=lambda: spawn_thread(q, diff_slice_folder))
+    uni_button = ttk.Button(difficulty_frame, compound='top', image=extract_slices_icon,
+                                text='Extract Slices', command=lambda: spawn_thread(q, diff_slice_folder))
 
     edit_tab = ttk.Frame(settings)
     def on_tab_change(event):

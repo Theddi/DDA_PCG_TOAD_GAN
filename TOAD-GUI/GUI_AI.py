@@ -1,3 +1,4 @@
+import tkinter.ttk
 from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog as fd
@@ -268,7 +269,7 @@ def TOAD_GUI():
 
         return
 
-    def save_txt(current=False):
+    def save_txt(current=False, name=level_obj.name):
         if not current:
             save_name = fd.asksaveasfile(title='Save level (.txt/.png)', initialdir=os.path.join(os.curdir, "levels"),
                                          mode='w', defaultextension=".txt",
@@ -285,7 +286,7 @@ def TOAD_GUI():
                 error_msg.set("Could not save level with this extension. Supported: .txt, .png")
             return
         else:
-            genFilePath = os.path.join(OUT, level_obj.name + ".txt")
+            genFilePath = os.path.join(OUT, name + ".txt")
             with open(genFilePath, 'w') as save_name:
                 text2save = ''.join(level_obj.ascii_level)
                 save_name.write(text2save)
@@ -568,6 +569,7 @@ def TOAD_GUI():
         threads = []
         standard_agent_time = 10
         error_msg.set("Iterating...")
+        da_progressbar['value'] = 0
 
         # Testing full level with strongest ai, to check if it's completable
         current_difficulty_label.config(text="Current Difficulty: playtesting...")
@@ -646,7 +648,8 @@ def TOAD_GUI():
             for thread in threads:
                 thread.join()
             delete_mario_finish()
-
+            da_progressbar['value'] += 100 / ((levelWidth - sl) / 4)
+        da_progressbar['value'] = 100
         # Reset to original Mario and Finish tokens
         set_mario_finish(marfin)
         redraw_image()
@@ -746,9 +749,8 @@ def TOAD_GUI():
 
     use_gen.trace("w", callback=set_button_state)
 
-    # Play and Controls Notebook
     p_c_tabs = ttk.Notebook(settings)
-
+    # Play and Controls Notebook Tab
     p_c_frame = ttk.Frame(settings)
     p_c_tabs.add(p_c_frame, text="Play/Controls")
     play_button = ttk.Button(p_c_frame, compound='top', image=play_level_icon,
@@ -789,6 +791,7 @@ def TOAD_GUI():
                                                   text='Use selected AI',
                                                   command=ai_switch,
                                                   variable=use_selected_ai)
+    # Difficulty Adjustment Notebook Tab
     difficulty_frame = ttk.Frame(settings)
     p_c_tabs.add(difficulty_frame, text="Difficulty Adjustment")
     iterate_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon,
@@ -797,12 +800,12 @@ def TOAD_GUI():
     slice_its_var = IntVar()
     slice_its_var.set(4)
     slice_its_label = ttk.Label(difficulty_frame, text="Slice Iterations: ")
-    slice_its_entry = ttk.Entry(difficulty_frame, textvariable=slice_its_var, validate="key", width=3, justify='right')
+    slice_its_entry = ttk.Entry(difficulty_frame, textvariable=slice_its_var, validate="key", width=3)
 
     slice_length_var = IntVar()
     slice_length_var.set(24)
     slice_length_label = ttk.Label(difficulty_frame, text="Slice Length: ")
-    slice_length_entry = ttk.Entry(difficulty_frame, textvariable=slice_length_var, validate="key", width=3, justify='right')
+    slice_length_entry = ttk.Entry(difficulty_frame, textvariable=slice_length_var, validate="key", width=3)
 
     current_difficulty_value = DoubleVar()
     current_difficulty_label = ttk.Label(difficulty_frame, text="Current Difficulty: Not determined")
@@ -812,20 +815,21 @@ def TOAD_GUI():
 
     current_difficulty_value.trace("w", callback=difficulty_value_changed)
 
-    das_value = IntVar()
-    das_value_label = ttk.Label(difficulty_frame, text=" 0")
+    das_value = DoubleVar()
+    das_value_entry = ttk.Entry(difficulty_frame, textvariable=das_value, width=4)
 
     def d_slider_changed(event):
-        das_value.set(round(das_value.get()))
-        das_value_label.config(text=das_value.get())
+        das_value.set(round(das_value.get(), 2))
 
     das_label = ttk.Label(difficulty_frame, text="Difficulty Adjustment")
-    difficulty_adjustment_slider = ttk.Scale(difficulty_frame, from_=0, to=10, orient='horizontal', variable=das_value,
-                                             command=d_slider_changed)
-    das_value.set(0)
+    difficulty_adjustment_slider = ttk.Scale(difficulty_frame, from_=0.000, to=1.000, orient='horizontal', variable=das_value,
+                                             command=d_slider_changed, length=250)
+    das_value.set(0.000)
+
+    da_progressbar = tkinter.ttk.Progressbar(difficulty_frame, orient='horizontal', mode='determinate', length=800)
+
 
     edit_tab = ttk.Frame(settings)
-
     def on_tab_change(event):
         tab = event.widget.tab('current')['text']
         if tab == 'Edit Mode':
@@ -941,15 +945,16 @@ def TOAD_GUI():
     descr_r.grid(column=1, row=3, sticky=(N, S, W), padx=1, pady=1)
 
     # On difficulty_frame
-    iterate_button.grid(column=0, row=0, rowspan=1, sticky=(N, S, E, W), padx=5, pady=5)
-    slice_its_label.grid(column=1, row=0, sticky=(N), padx=5, pady=5)
-    slice_its_entry.grid(column=2, row=0, sticky=(N), padx=5, pady=5)
-    slice_length_label.grid(column=1, row=0, padx=5, pady=5)
-    slice_length_entry.grid(column=2, row=0, padx=5, pady=5)
-    current_difficulty_label.grid(column=1, row=1, sticky=(N), padx=5, pady=5)
-    das_label.grid(column=0, row=1, sticky=(N, W), padx=5, pady=5)
-    difficulty_adjustment_slider.grid(column=0, row=1, sticky=(N), pady=5)
-    das_value_label.grid(column=0, row=1, sticky=(N, E), padx=5, pady=5)
+    iterate_button.grid(column=0, row=0, sticky=(N, S, E, W), padx=5, pady=5)
+    slice_its_label.grid(column=2, row=0, sticky=(N, W), padx=5, pady=5)
+    slice_its_entry.grid(column=3, row=0, sticky=(N), padx=5, pady=5)
+    slice_length_label.grid(column=2, row=0, sticky=(W), padx=5, pady=5)
+    slice_length_entry.grid(column=3, row=0, padx=5, pady=5)
+    current_difficulty_label.grid(column=0, row=1, columnspan=4, sticky=(N), padx=5, pady=5)
+    das_label.grid(column=4, row=0, sticky=(N), padx=5, pady=5)
+    das_value_entry.grid(column=5, row=0, sticky=(N), padx=5, pady=5)
+    difficulty_adjustment_slider.grid(column=4, row=0, columnspan=3, pady=5)
+    da_progressbar.grid(column=0, row=1, columnspan=6, sticky=(S), padx=5, pady=5)
 
     # Column/Rowconfigure
     root.columnconfigure(0, weight=1)
@@ -984,7 +989,13 @@ def TOAD_GUI():
 
     difficulty_frame.columnconfigure(0, weight=3)
     difficulty_frame.columnconfigure(1, weight=1)
+    difficulty_frame.columnconfigure(2, weight=1)
+    difficulty_frame.columnconfigure(3, weight=1)
+    difficulty_frame.columnconfigure(4, weight=1)
+    difficulty_frame.columnconfigure(5, weight=1)
+    difficulty_frame.columnconfigure(6, weight=1)
     difficulty_frame.rowconfigure(0, weight=1)
+    difficulty_frame.rowconfigure(1, weight=1)
     # ---------------------------------------- Edit Mode ----------------------------------------
 
     # Define Variables

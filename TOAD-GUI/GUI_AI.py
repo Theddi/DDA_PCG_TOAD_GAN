@@ -481,8 +481,8 @@ def TOAD_GUI():
 
         finally:
             pid = gateway.java_process.pid
-
             gateway.shutdown()
+            # TODO Generalize for other os than windows
             os.system("taskkill /f /pid %d /t" % pid)
 
             if not multicall:
@@ -491,8 +491,6 @@ def TOAD_GUI():
         return
 
     def get_difficulty(resultDataframe):
-        alpha_t = 1.0
-        beta_ai = 1.0
         min_completion = 1/slice_length_var.get()
         # Get base time and remove baselevel result
         base_time = resultDataframe.loc[resultDataframe['file_name'].str.contains("base"), 'time_needed'].iloc[0]
@@ -576,7 +574,7 @@ def TOAD_GUI():
 
         # Testing full level with strongest ai, to check if it's completable
         current_difficulty_label.config(text="Current Difficulty: playtesting...")
-        testthread = spawn_thread(q, play_level, "astar", False, 30, True, True)
+        testthread = spawn_thread(q, play_level, "astar", False, 60, True, True)
         testthread.join()
 
         current_difficulty_label.config(text="Current Difficulty: determining...")

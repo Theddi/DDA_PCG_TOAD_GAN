@@ -492,11 +492,8 @@ def TOAD_GUI():
 
     def get_difficulty(resultDataframe):
         min_completion = 1/slice_length_var.get()
-        # Get base time and remove baselevel result
-        base_time = resultDataframe.loc[resultDataframe['file_name'].str.contains("base"), 'time_needed'].iloc[0]
-        resultDataframe = resultDataframe.drop(resultDataframe[resultDataframe['file_name'].str.contains("base")].index)
-
         new_dataframe = pd.DataFrame()
+
         grouped = resultDataframe.groupby('file_name')
         for name, group in grouped:
             # Check if random ai can complete slice and remove result
@@ -595,10 +592,6 @@ def TOAD_GUI():
         levelHeight = len(level_obj.ascii_level)
         levelWidth = len(level_obj.ascii_level[0])
         sl = slice_length_var.get()
-
-        # Create and play Base level
-        baselevel = create_base_slice(levelHeight, sl)
-        spawn_thread(q, play_level, "astar", False, standard_agent_time, False, True, baselevel, "base").join()
 
         # Take original Mario and Finish position out of level
         marfin = delete_mario_finish()

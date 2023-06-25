@@ -19,6 +19,7 @@ from utils.level_utils import read_level_from_file, one_hot_to_ascii_level, plac
     place_token_with_limits, create_base_slice
 from utils.level_image_gen import LevelImageGen
 from utils.toad_gan_utils import load_trained_pyramid, generate_sample, TOADGAN_obj
+from wfc_2019f.wfc import wfc_control
 
 from filelock import FileLock
 import shutil
@@ -695,7 +696,7 @@ def TOAD_GUI():
             os.makedirs(folder)
 
         for row in level_obj.ascii_level:
-            slice_ascii.append(row[bounds[0]:bounds[1]])
+            slice_ascii.append(row[bounds[0]:bounds[1]+1])
         slice_file = open(os.path.join(folder, name+".txt"), 'w')
         slice_file.write("\n".join(slice_ascii))
         slice_file.close()
@@ -713,6 +714,28 @@ def TOAD_GUI():
                     # Safe folder for slice of difficulty: 0.2521 -> 025/ ; 1.7986 -> 179/
                     diff_folder = "%03d/" % math.floor(dataframe['difficulty_score'].loc[idx] * 100)
                     save_slice(bounds, os.path.join(OUT, diff_folder), level_obj.name + "_" + idx)
+
+    def ascii_to_image(filepath=None):
+        if filepath:
+            folder, name = os.path.split(filepath)
+
+            lev, tok = read_level_from_file(folder, name)
+            slice_ascii = one_hot_to_ascii_level(lev, tok)
+
+            ImgGen.render(slice_ascii).save(filepath.replace(".txt", ".png"))
+        return len(slice_ascii[0]), len(slice_ascii)
+
+    def wfc_run(filename, length, height, inputfolder):
+        wfc_control.execute_wfc(filename=filename, tile_size=16, pattern_width=5, output_size=[length, height],
+                                output_periodic=False, input_periodic=False, logging=True,
+                                input_folder=inputfolder, output_destination=OUT, ground=-1, rotations=2)
+
+    def wfc_recreate():
+        slice_path = "./levels/original_diff_slice_v1/050/lvl_2-1_040.txt"
+        folder, name = os.path.split(slice_path)
+        length, height = ascii_to_image(slice_path)
+        spawn_thread(q, wfc_run, name[:-4], length, height, folder).join()
+        print("WFC END")
     # ---------------------------------------- Layout ----------------------------------------
 
     settings = ttk.Frame(root, padding=(15, 15, 15, 15), width=1000, height=1000)  # Main Frame
@@ -851,8 +874,11 @@ def TOAD_GUI():
 
     da_progressbar = tkinter.ttk.Progressbar(difficulty_frame, orient='horizontal', mode='determinate', length=800)
 
-    uni_button = ttk.Button(difficulty_frame, compound='top', image=extract_slices_icon,
+    slice_extract_button = ttk.Button(difficulty_frame, compound='top', image=extract_slices_icon,
                                 text='Extract Slices', command=lambda: spawn_thread(q, diff_slice_folder))
+
+    wfc_sample_button = ttk.Button(difficulty_frame, compound='top',  # image=extract_slices_icon,
+                                text='WFC Resample', command=lambda: spawn_thread(q, wfc_recreate))
 
     edit_tab = ttk.Frame(settings)
     def on_tab_change(event):
@@ -980,7 +1006,8 @@ def TOAD_GUI():
     das_value_entry.grid(column=5, row=0, sticky=(N), padx=5, pady=5)
     difficulty_adjustment_slider.grid(column=4, row=0, columnspan=3, pady=5)
     da_progressbar.grid(column=0, row=1, columnspan=6, sticky=(S), padx=5, pady=5)
-    uni_button.grid(column=5, row=1, sticky=(N))
+    slice_extract_button.grid(column=5, row=1, sticky=(N))
+    wfc_sample_button.grid(column=4, row=1, sticky=(N))
 
     # Column/Rowconfigure
     root.columnconfigure(0, weight=1)

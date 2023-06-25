@@ -3,9 +3,9 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/TOAD-GAN/output" />
-      <excludeFolder url="file://$MODULE_DIR$/wfc_2019f/.pytest_cache" />
-      <excludeFolder url="file://$MODULE_DIR$/wfc_2019f/logs" />
-      <excludeFolder url="file://$MODULE_DIR$/wfc_2019f/output" />
+      <excludeFolder url="file://$MODULE_DIR$/TOAD-GUI/wfc_2019f/.pytest_cache" />
+      <excludeFolder url="file://$MODULE_DIR$/TOAD-GUI/wfc_2019f/logs" />
+      <excludeFolder url="file://$MODULE_DIR$/TOAD-GUI/wfc_2019f/output" />
     </content>
     <orderEntry type="jdk" jdkName="DDA_PCG_TOAD_GAN" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

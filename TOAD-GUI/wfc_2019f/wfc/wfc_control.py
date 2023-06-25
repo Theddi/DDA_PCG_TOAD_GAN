@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import os
 from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple
 from .wfc_tiles import make_tile_catalog
 from .wfc_patterns import (
@@ -38,7 +39,7 @@ from .wfc_visualize import (
     make_solver_loggers,
     tile_grid_to_image,
 )
-import imageio  # type: ignore
+import imageio.v2 as imageio
 import numpy as np
 import time
 import logging
@@ -100,11 +101,11 @@ def execute_wfc(
     log_stats_to_output: Optional[Callable[[Dict[str, Any], str], None]] = None,
     *,
     image: Optional[NDArray[np.integer]] = None,
+    output_destination = r"./output/",
+    input_folder = r"./images/samples/",
 ) -> NDArray[np.integer]:
     timecode = datetime.datetime.now().isoformat().replace(":", ".")
     time_begin = time.perf_counter()
-    output_destination = r"./output/"
-    input_folder = r"./images/samples/"
 
     rotations -= 1  # change to zero-based
 
@@ -128,7 +129,7 @@ def execute_wfc(
     if filename:
         if image is not None:
             raise TypeError("Only filename or image can be provided, not both.")
-        image = imageio.imread(input_folder + filename + ".png")[:, :, :3]  # TODO: handle alpha channels
+        image = imageio.imread(os.path.join(input_folder,  filename) + ".png")[:, :, :3]  # TODO: handle alpha channels
 
     if image is None:
         raise TypeError("An image must be given.")

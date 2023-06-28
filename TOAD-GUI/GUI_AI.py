@@ -533,31 +533,31 @@ def TOAD_GUI():
             format_str += '\n'
         return format_str
 
-    def delete_mario_finish():
+    def delete_mario_finish(asc=level_obj.ascii_level):
         mar_fin = [None, None]
-        for height, line in enumerate(level_obj.ascii_level):
+        for height, line in enumerate(asc):
             for length, tok in enumerate(line):
                 if tok == 'M' or tok == 'F':
-                    tmp_slice = list(level_obj.ascii_level[height])
+                    tmp_slice = list(asc[height])
                     tmp_slice[length] = '-'
-                    level_obj.ascii_level[height] = "".join(tmp_slice)
+                    asc[height] = "".join(tmp_slice)
                 if tok == 'M':
                     mar_fin[0] = (height, length)
                 if tok == 'F':
                     mar_fin[1] = (height, length)
         return mar_fin
 
-    def set_mario_finish(mar_fin):
-        for height, line in enumerate(level_obj.ascii_level):
+    def set_mario_finish(mar_fin, asc=level_obj.ascii_level):
+        for height, line in enumerate(asc):
             for length, tok in enumerate(line):
                 if height == mar_fin[0][0] and length == mar_fin[0][1]:
-                    tmp_slice = list(level_obj.ascii_level[height])
+                    tmp_slice = list(asc[height])
                     tmp_slice[length] = 'M'
-                    level_obj.ascii_level[height] = "".join(tmp_slice)
+                    asc[height] = "".join(tmp_slice)
                 if height == mar_fin[1][0] and length == mar_fin[1][1]:
-                    tmp_slice = list(level_obj.ascii_level[height])
+                    tmp_slice = list(asc[height])
                     tmp_slice[length] = 'F'
-                    level_obj.ascii_level[height] = "".join(tmp_slice)
+                    asc[height] = "".join(tmp_slice)
         return mar_fin
 
     def ai_iterate_level(clear="all"):
@@ -723,19 +723,35 @@ def TOAD_GUI():
             slice_ascii = one_hot_to_ascii_level(lev, tok)
 
             ImgGen.render(slice_ascii).save(filepath.replace(".txt", ".png"))
-        return len(slice_ascii[0]), len(slice_ascii)
+        return len(slice_ascii[0])-1, len(slice_ascii)
 
-    def wfc_run(filename, length, height, inputfolder):
+    def wfc_run(filename, length, height, inputfolder, outputfolder=OUT):
         wfc_control.execute_wfc(filename=filename, tile_size=16, pattern_width=5, output_size=[length, height],
                                 output_periodic=False, input_periodic=False, logging=True,
-                                input_folder=inputfolder, output_destination=OUT, ground=-1, rotations=2)
+                                input_folder=inputfolder, output_destination=outputfolder, ground=-1, rotations=1)
 
     def wfc_recreate():
-        slice_path = "./levels/original_diff_slice_v1/050/lvl_2-1_040.txt"
-        folder, name = os.path.split(slice_path)
-        length, height = ascii_to_image(slice_path)
-        spawn_thread(q, wfc_run, name[:-4], length, height, folder).join()
-        print("WFC END")
+        da_progressbar['value'] = 0
+        directory = fd.askdirectory(initialdir=CURDIR)
+        subdirs = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
+        sdlen = len(subdirs)
+        print(directory)
+        print(subdirs)
+        for d in subdirs:
+            print(d)
+            levels = [os.path.join(d, f) for f in os.listdir(d) if f[-3:] == "txt"]
+            llen = len(levels)
+            for l in levels:
+                print(l)
+                slice_path = l
+                folder, name = os.path.split(slice_path)
+                length, height = ascii_to_image(slice_path)
+                genpath = os.path.join(folder, "gen/")
+                if not os.path.exists(genpath):
+                    os.makedirs(genpath)
+                spawn_thread(q, wfc_run, name[:-4], length, height, folder, genpath).join()
+                da_progressbar['value'] += (100 / llen) * (1 / sdlen)
+        da_progressbar['value'] = 100
     # ---------------------------------------- Layout ----------------------------------------
 
     settings = ttk.Frame(root, padding=(15, 15, 15, 15), width=1000, height=1000)  # Main Frame

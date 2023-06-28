@@ -11,6 +11,6 @@
 -----SSS------TT---2---T
 --------------TT-------T
 --------------TT-------T
--M------------TT----k--T
+--------------TT----k--T
 XXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXX

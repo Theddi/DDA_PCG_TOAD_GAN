@@ -533,31 +533,31 @@ def TOAD_GUI():
             format_str += '\n'
         return format_str
 
-    def delete_mario_finish(asc=level_obj.ascii_level):
+    def delete_mario_finish():
         mar_fin = [None, None]
-        for height, line in enumerate(asc):
+        for height, line in enumerate(level_obj.ascii_level):
             for length, tok in enumerate(line):
                 if tok == 'M' or tok == 'F':
-                    tmp_slice = list(asc[height])
+                    tmp_slice = list(level_obj.ascii_level[height])
                     tmp_slice[length] = '-'
-                    asc[height] = "".join(tmp_slice)
+                    level_obj.ascii_level[height] = "".join(tmp_slice)
                 if tok == 'M':
                     mar_fin[0] = (height, length)
                 if tok == 'F':
                     mar_fin[1] = (height, length)
         return mar_fin
 
-    def set_mario_finish(mar_fin, asc=level_obj.ascii_level):
-        for height, line in enumerate(asc):
+    def set_mario_finish(mar_fin):
+        for height, line in enumerate(level_obj.ascii_level):
             for length, tok in enumerate(line):
                 if height == mar_fin[0][0] and length == mar_fin[0][1]:
-                    tmp_slice = list(asc[height])
+                    tmp_slice = list(level_obj.ascii_level[height])
                     tmp_slice[length] = 'M'
-                    asc[height] = "".join(tmp_slice)
+                    level_obj.ascii_level[height] = "".join(tmp_slice)
                 if height == mar_fin[1][0] and length == mar_fin[1][1]:
-                    tmp_slice = list(asc[height])
+                    tmp_slice = list(level_obj.ascii_level[height])
                     tmp_slice[length] = 'F'
-                    asc[height] = "".join(tmp_slice)
+                    level_obj.ascii_level[height] = "".join(tmp_slice)
         return mar_fin
 
     def ai_iterate_level(clear="all"):
@@ -707,6 +707,7 @@ def TOAD_GUI():
         for l in levels:
             load_level_by_path(l)
             dataframe, slice_boundaries = ai_iterate_level("results")
+            marfin = delete_mario_finish()
             for idx in dataframe.index:
                 if idx.isnumeric():
                     # Gets x boundaries of slice
@@ -714,6 +715,7 @@ def TOAD_GUI():
                     # Safe folder for slice of difficulty: 0.2521 -> 025/ ; 1.7986 -> 179/
                     diff_folder = "%03d/" % math.floor(dataframe['difficulty_score'].loc[idx] * 100)
                     save_slice(bounds, os.path.join(OUT, diff_folder), level_obj.name + "_" + idx)
+            set_mario_finish(marfin)
 
     def ascii_to_image(filepath=None):
         if filepath:

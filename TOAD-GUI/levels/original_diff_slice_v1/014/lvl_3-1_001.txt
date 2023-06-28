@@ -11,6 +11,6 @@
 ---------Q---------SSS--
 ---------------------K--
 ------------------------
--M----------------K-----
+------------------K-----
 XXXXXXXXXXXXXXXXXXXXXXXX
 XXXXXXXXXXXXXXXXXXXXXXXX

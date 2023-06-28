@@ -396,7 +396,7 @@ def execute_wfc(
                     solution_tile_grid,
                     tile_catalog,
                     (tile_size, tile_size),
-                    output_destination + filename + "_" + timecode + ".png",
+                    os.path.join(output_destination, filename + "_" + timecode + ".png"),
                 )
 
             time_solve_end = time.perf_counter()

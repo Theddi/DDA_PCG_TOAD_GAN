@@ -727,10 +727,11 @@ def TOAD_GUI():
             ImgGen.render(slice_ascii).save(filepath.replace(".txt", ".png"))
         return len(slice_ascii[0])-1, len(slice_ascii)
 
-    def wfc_run(filename, length, height, inputfolder, outputfolder=OUT):
-        wfc_control.execute_wfc(filename=filename, tile_size=16, pattern_width=5, output_size=[length, height],
+    def wfc_run(ascii_file, length, height, outputfolder=OUT):
+        wfc_control.execute_wfc(pattern_width=5, output_size=[length, height],
                                 output_periodic=False, input_periodic=False, logging=True,
-                                input_folder=inputfolder, output_destination=outputfolder, ground=-1, rotations=1)
+                                output_destination=outputfolder, ground=-1, rotations=1,
+                                mario_version=True, ascii_file=ascii_file)
 
     def wfc_recreate():
         da_progressbar['value'] = 0
@@ -747,11 +748,14 @@ def TOAD_GUI():
                 print(l)
                 slice_path = l
                 folder, name = os.path.split(slice_path)
-                length, height = ascii_to_image(slice_path)
+                lev, tok = read_level_from_file(folder, name)
+                slice_ascii = one_hot_to_ascii_level(lev, tok)
+                length, height = len(slice_ascii[0])-1, len(slice_ascii)
+
                 genpath = os.path.join(folder, "gen/")
                 if not os.path.exists(genpath):
                     os.makedirs(genpath)
-                spawn_thread(q, wfc_run, name[:-4], length, height, folder, genpath).join()
+                spawn_thread(q, wfc_run, slice_ascii, length, height, genpath).join()
                 da_progressbar['value'] += (100 / llen) * (1 / sdlen)
         da_progressbar['value'] = 100
     # ---------------------------------------- Layout ----------------------------------------

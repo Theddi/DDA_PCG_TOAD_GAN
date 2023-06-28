@@ -727,11 +727,22 @@ def TOAD_GUI():
             ImgGen.render(slice_ascii).save(filepath.replace(".txt", ".png"))
         return len(slice_ascii[0])-1, len(slice_ascii)
 
-    def wfc_run(ascii_file, length, height, outputfolder=OUT):
-        wfc_control.execute_wfc(pattern_width=5, output_size=[length, height],
+    def wfc_run(file_name, ascii_file, length, height, outputfolder=OUT):
+        wfc_control.execute_wfc(filename=file_name, pattern_width=5, output_size=[length, height],
                                 output_periodic=False, input_periodic=False, logging=True,
                                 output_destination=outputfolder, ground=-1, rotations=1,
                                 mario_version=True, ascii_file=ascii_file)
+
+    def try_once():
+        folder, name = os.path.split(r"C:\Studium\Bachelorarbeit_save\DDA_PCG_TOAD_GAN\TOAD-GUI\levels\original_diff_slice_v1\013\lvl_1-1_004.txt")
+        lev, tok = read_level_from_file(folder, name)
+        slice_ascii = one_hot_to_ascii_level(lev, tok)
+        length, height = len(slice_ascii[0]) - 1, len(slice_ascii)
+
+        genpath = os.path.join(folder, "gen/")
+        if not os.path.exists(genpath):
+            os.makedirs(genpath)
+        spawn_thread(q, wfc_run, name[:-4], slice_ascii, length, height, genpath).join()
 
     def wfc_recreate():
         da_progressbar['value'] = 0
@@ -900,7 +911,7 @@ def TOAD_GUI():
                                 text='Extract Slices', command=lambda: spawn_thread(q, diff_slice_folder))
 
     wfc_sample_button = ttk.Button(difficulty_frame, compound='top',  # image=extract_slices_icon,
-                                text='WFC Resample', command=lambda: spawn_thread(q, wfc_recreate))
+                                text='WFC Resample', command=lambda: spawn_thread(q, try_once))
 
     edit_tab = ttk.Frame(settings)
     def on_tab_change(event):

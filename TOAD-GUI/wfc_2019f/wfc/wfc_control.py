@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 import os
 from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple
-from .wfc_tiles import make_tile_catalog
+from .wfc_tiles import make_tile_catalog, make_mario_catalog
 from .wfc_patterns import (
     pattern_grid_to_tiles,
     make_pattern_catalog_with_rotations,
@@ -38,6 +38,7 @@ from .wfc_visualize import (
     make_solver_visualizers,
     make_solver_loggers,
     tile_grid_to_image,
+    save_ascii_solution,
 )
 import imageio.v2 as imageio
 import numpy as np
@@ -103,6 +104,8 @@ def execute_wfc(
     image: Optional[NDArray[np.integer]] = None,
     output_destination = r"./output/",
     input_folder = r"./images/samples/",
+    mario_version = False,
+    ascii_file = None
 ) -> NDArray[np.integer]:
     timecode = datetime.datetime.now().isoformat().replace(":", ".")
     time_begin = time.perf_counter()
@@ -124,28 +127,45 @@ def execute_wfc(
         "global constraint": global_constraint,
         "backtracking": backtracking,
     }
+    # TODO Implement Mario Token Image Catalog
+    if mario_version:
+        visualize = False
 
     # Load the image
-    if filename:
+    if filename and not mario_version:
         if image is not None:
             raise TypeError("Only filename or image can be provided, not both.")
         image = imageio.imread(os.path.join(input_folder,  filename) + ".png")[:, :, :3]  # TODO: handle alpha channels
 
-    if image is None:
+    if image is None and not mario_version:
         raise TypeError("An image must be given.")
+
+    if ascii_file is None and mario_version:
+        raise TypeError("An ascii file must be given.")
 
     # TODO: generalize this to more than the four cardinal directions
     direction_offsets = list(enumerate([(0, -1), (1, 0), (0, 1), (-1, 0)]))
 
-    tile_catalog, tile_grid, _code_list, _unique_tiles = make_tile_catalog(image, tile_size)
-    (
-        pattern_catalog,
-        pattern_weights,
-        pattern_list,
-        pattern_grid,
-    ) = make_pattern_catalog_with_rotations(
-        tile_grid, pattern_width, input_is_periodic=input_periodic, rotations=rotations
-    )
+    if not mario_version:
+        tile_catalog, tile_grid, _code_list, _unique_tiles = make_tile_catalog(image, tile_size)
+        (
+            pattern_catalog,
+            pattern_weights,
+            pattern_list,
+            pattern_grid,
+        ) = make_pattern_catalog_with_rotations(
+            tile_grid, pattern_width, input_is_periodic=input_periodic, rotations=rotations
+        )
+    else:
+        tile_grid, _code_list, _unique_tiles = make_mario_catalog(ascii_file)
+        (
+            pattern_catalog,
+            pattern_weights,
+            pattern_list,
+            pattern_grid,
+        ) = make_pattern_catalog_with_rotations(
+            tile_grid, pattern_width, input_is_periodic=input_periodic, rotations=rotations
+        )
 
     logger.debug("pattern catalog")
 
@@ -391,12 +411,17 @@ def execute_wfc(
 
             logger.debug("Solution:")
             # logger.debug(solution_tile_grid)
-            if filename:
+            if filename and not mario_version:
                 render_tiles_to_output(
                     solution_tile_grid,
                     tile_catalog,
                     (tile_size, tile_size),
                     os.path.join(output_destination, filename + "_" + timecode + ".png"),
+                )
+            if filename and mario_version:
+                save_ascii_solution(solution_tile_grid,
+                    (tile_size, tile_size),
+                    os.path.join(output_destination, filename + "_" + timecode + ".txt"),
                 )
 
             time_solve_end = time.perf_counter()
@@ -438,7 +463,7 @@ def execute_wfc(
             outstats.update(stats)
             if log_stats_to_output is not None:
                 log_stats_to_output(outstats, output_destination + log_filename + ".tsv")
-        if solution_tile_grid is not None:
+        if solution_tile_grid is not None and not mario_version:
             return tile_grid_to_image(solution_tile_grid, tile_catalog, (tile_size, tile_size))
 
     raise TimedOut("Attempt limit exceeded.")

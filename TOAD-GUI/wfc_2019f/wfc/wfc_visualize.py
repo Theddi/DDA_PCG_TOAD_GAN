@@ -594,6 +594,17 @@ def render_tiles_to_output(
     img = tile_grid_to_image(tile_grid.T, tile_catalog, tile_size)
     imageio.imwrite(output_filename, img.astype(np.uint8))
 
+def save_ascii_solution(tile_grid: NDArray[np.int64],
+    tile_size: Tuple[int, int],
+    output_filename: str,
+) -> None:
+    with open(output_filename, 'w') as file:
+        for idx, row in enumerate(tile_grid):
+            for ch in row:
+                file.write(chr(ch))
+            if idx != len(tile_grid)-1:
+                file.write('\n')
+
 
 def blit(destination, sprite, upper_left, layer=False, check=False):
     """

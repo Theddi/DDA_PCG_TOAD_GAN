@@ -420,7 +420,6 @@ def execute_wfc(
                 )
             if filename and mario_version:
                 save_ascii_solution(solution_tile_grid,
-                    (tile_size, tile_size),
                     os.path.join(output_destination, filename + "_" + timecode + ".txt"),
                 )
 
@@ -465,5 +464,7 @@ def execute_wfc(
                 log_stats_to_output(outstats, output_destination + log_filename + ".tsv")
         if solution_tile_grid is not None and not mario_version:
             return tile_grid_to_image(solution_tile_grid, tile_catalog, (tile_size, tile_size))
+        if solution_tile_grid is not None and mario_version:
+            return None
 
     raise TimedOut("Attempt limit exceeded.")

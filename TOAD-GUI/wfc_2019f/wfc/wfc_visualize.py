@@ -594,10 +594,11 @@ def render_tiles_to_output(
     img = tile_grid_to_image(tile_grid.T, tile_catalog, tile_size)
     imageio.imwrite(output_filename, img.astype(np.uint8))
 
+
 def save_ascii_solution(tile_grid: NDArray[np.int64],
-    tile_size: Tuple[int, int],
     output_filename: str,
 ) -> None:
+    tile_grid = np.rot90(tile_grid, k=3, axes=(0, 1))
     with open(output_filename, 'w') as file:
         for idx, row in enumerate(tile_grid):
             for ch in row:

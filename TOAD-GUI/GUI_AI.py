@@ -717,21 +717,42 @@ def TOAD_GUI():
                     save_slice(bounds, os.path.join(OUT, diff_folder), level_obj.name + "_" + idx)
             set_mario_finish(marfin)
 
-    def ascii_to_image(filepath=None):
+    def ascii_to_image(filepath=None, outpath=None):
+        if outpath is None:
+            outpath = filepath
         if filepath:
             folder, name = os.path.split(filepath)
 
             lev, tok = read_level_from_file(folder, name)
             slice_ascii = one_hot_to_ascii_level(lev, tok)
 
-            ImgGen.render(slice_ascii).save(filepath.replace(".txt", ".png"))
+            ImgGen.render(slice_ascii).save(outpath.replace(".txt", ".png"))
         return len(slice_ascii[0])-1, len(slice_ascii)
 
-    def wfc_run(file_name, ascii_file, length, height, outputfolder=OUT):
+    def convert_slices_to_images():
+        directory = fd.askdirectory(initialdir=CURDIR)
+        convert_slices_to_images_rec(directory)
+
+    def convert_slices_to_images_rec(directory):
+        for f in os.listdir(directory):
+            filepath = os.path.join(directory, f)
+            if os.path.isdir(filepath):
+                convert_slices_to_images_rec(filepath)
+            elif filepath[-3:] == "txt":
+                outpath = os.path.abspath(filepath).replace(CURDIR, "")
+                outpath = os.path.abspath(OUT[:-1] + outpath)
+                folder, name = os.path.split(outpath)
+                if not os.path.exists(folder):
+                    os.makedirs(folder)
+
+                ascii_to_image(filepath, outpath)
+
+    def wfc_run(file_name, ascii_file, length, height, added_progress, outputfolder=OUT):
         wfc_control.execute_wfc(filename=file_name, pattern_width=5, output_size=[length, height],
                                 output_periodic=False, input_periodic=False, logging=True,
                                 output_destination=outputfolder, ground=-1, rotations=1,
                                 mario_version=True, ascii_file=ascii_file)
+        da_progressbar['value'] += added_progress
 
     def try_once():
         folder, name = os.path.split(r"C:\Studium\Bachelorarbeit_save\DDA_PCG_TOAD_GAN\TOAD-GUI\levels\original_diff_slice_v1\013\lvl_1-1_004.txt")
@@ -742,15 +763,14 @@ def TOAD_GUI():
         genpath = os.path.join(folder, "gen/")
         if not os.path.exists(genpath):
             os.makedirs(genpath)
-        spawn_thread(q, wfc_run, name[:-4], slice_ascii, length, height, genpath).join()
+        spawn_thread(q, wfc_run, name[:-4], slice_ascii, length, height, 100, genpath).join()
 
     def wfc_recreate():
         da_progressbar['value'] = 0
+        threads = []
         directory = fd.askdirectory(initialdir=CURDIR)
         subdirs = [os.path.join(directory, f) for f in os.listdir(directory) if os.path.isdir(os.path.join(directory, f))]
         sdlen = len(subdirs)
-        print(directory)
-        print(subdirs)
         for d in subdirs:
             print(d)
             levels = [os.path.join(d, f) for f in os.listdir(d) if f[-3:] == "txt"]
@@ -766,8 +786,11 @@ def TOAD_GUI():
                 genpath = os.path.join(folder, "gen/")
                 if not os.path.exists(genpath):
                     os.makedirs(genpath)
-                spawn_thread(q, wfc_run, slice_ascii, length, height, genpath).join()
-                da_progressbar['value'] += (100 / llen) * (1 / sdlen)
+                threads.append(spawn_thread(q, wfc_run, name[:-4], slice_ascii,
+                                            length, height, (100 / llen) * (1 / sdlen), genpath)
+                               )
+        for t in threads:
+            t.join()
         da_progressbar['value'] = 100
     # ---------------------------------------- Layout ----------------------------------------
 

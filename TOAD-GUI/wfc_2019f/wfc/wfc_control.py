@@ -88,6 +88,7 @@ def execute_wfc(
     rotations: int = 8,
     output_size: Tuple[int, int] = (48, 48),
     ground: Optional[int] = None,
+    sky: Optional[bool] = None,
     attempt_limit: int = 10,
     output_periodic: bool = True,
     input_periodic: bool = True,
@@ -201,7 +202,6 @@ def execute_wfc(
             direction_offsets,
             (pattern_width, pattern_width),
         )
-
     logger.debug("adjacency_relations")
 
     if visualize:
@@ -236,17 +236,51 @@ def execute_wfc(
 
     time_adjacency = time.perf_counter()
 
-    ### Ground ###
-
+    ### Ground and Sky###
+    ''' Ground defines all patterns currently at Ground level edge which is determined by direction: e.g. 3 = Down
+        If Sky is set, opposite edge is fixed too
+    '''
+    # TODO implement ground and sky to be on the sides for other than mario levels
     ground_list: Optional[NDArray[np.int64]] = None
-    if ground:
+    if ground == 3:
         ground_list = np.vectorize(lambda x: encode_patterns[x])(
-            pattern_grid.flat[(ground - 1) :]
+            pattern_grid[len(pattern_grid)-1, :]
         )
+        if sky:
+            sky_list = np.vectorize(lambda x: encode_patterns[x])(
+                pattern_grid[0, :]
+            )
+    if ground == 1:
+        ground_list = np.vectorize(lambda x: encode_patterns[x])(
+            pattern_grid[0, :]
+        )
+        if sky:
+            sky_list = np.vectorize(lambda x: encode_patterns[x])(
+                pattern_grid[len(pattern_grid)-1, :]
+            )
+
     if ground_list is None or ground_list.size == 0:
         ground_list = None
+    if sky_list is None or sky_list.size == 0:
+        sky_list = None
 
+    if sky_list is not None:
+        sky_list = list(set(sky_list))
+        sky_catalog = {
+            encode_patterns[k]: v
+            for k, v in pattern_catalog.items()
+            if encode_patterns[k] in sky_list
+        }
+        if visualize:
+            figure_pattern_catalog(
+                sky_catalog,
+                tile_catalog,
+                pattern_weights,
+                pattern_width,
+                output_filename=f"visualization/patterns_sky_{filename}_{timecode}",
+            )
     if ground_list is not None:
+        ground_list = list(set(ground_list))
         ground_catalog = {
             encode_patterns[k]: v
             for k, v in pattern_catalog.items()
@@ -262,8 +296,9 @@ def execute_wfc(
             )
 
     wave = makeWave(
-        number_of_patterns, output_size[0], output_size[1], ground=ground_list
+        number_of_patterns, output_size[0], output_size[1], ground=ground_list, sky=sky_list
     )
+
     adjacency_matrix = makeAdj(adjacency_list)
 
     ### Heuristics ###
@@ -380,6 +415,7 @@ def execute_wfc(
     attempts = 0
     while attempts < attempt_limit:
         attempts += 1
+        print(attempts)
         time_solve_start = time.perf_counter()
         stats = {}
         # profiler = pprofile.Profile()
@@ -465,6 +501,7 @@ def execute_wfc(
         if solution_tile_grid is not None and not mario_version:
             return tile_grid_to_image(solution_tile_grid, tile_catalog, (tile_size, tile_size))
         if solution_tile_grid is not None and mario_version:
+            print("Finish")
             return None
 
     raise TimedOut("Attempt limit exceeded.")

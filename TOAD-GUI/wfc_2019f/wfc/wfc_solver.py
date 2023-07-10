@@ -111,13 +111,19 @@ class Solver:
         return numpy.argmax(self.wave, axis=0)
 
 
-def makeWave(n: int, w: int, h: int, ground: Optional[Iterable[int]] = None) -> NDArray[numpy.bool_]:
+def makeWave(n: int, w: int, h: int, ground: Optional[Iterable[int]] = None, sky: Optional[Iterable[int]] = None
+             ) -> NDArray[numpy.bool_]:
     wave: NDArray[numpy.bool_] = numpy.ones((n, w, h), dtype=numpy.bool_)
     if ground is not None:
         wave[:, :, h - 1] = False
         for g in ground:
-            wave[g, :,] = False
+            if g not in sky:
+                wave[g, :, :] = False
             wave[g, :, h - 1] = True
+    if sky is not None:
+        wave[:, :, 0] = False
+        for s in sky:
+            wave[s, :, 0] = True
     # logger.debug(wave)
     # for i in range(wave.shape[0]):
     #  logger.debug(wave[i])

@@ -750,20 +750,27 @@ def TOAD_GUI():
     def wfc_run(file_name, ascii_file, length, height, added_progress, outputfolder=OUT):
         wfc_control.execute_wfc(filename=file_name, pattern_width=5, output_size=[length, height],
                                 output_periodic=False, input_periodic=False, logging=True,
-                                output_destination=outputfolder, ground=-1, rotations=1,
-                                mario_version=True, ascii_file=ascii_file)
+                                output_destination=outputfolder, ground=3, sky=True, rotations=1,
+                                mario_version=True, ascii_file=ascii_file, backtracking=True)
         da_progressbar['value'] += added_progress
 
     def try_once():
-        folder, name = os.path.split(r"C:\Studium\Bachelorarbeit_save\DDA_PCG_TOAD_GAN\TOAD-GUI\levels\original_diff_slice_v1\013\lvl_1-1_004.txt")
+        folder, name = os.path.split(r"C:\Studium\Bachelorarbeit_save\DDA_PCG_TOAD_GAN\TOAD-GUI\levels\originals\lvl_6-2.txt")
         lev, tok = read_level_from_file(folder, name)
         slice_ascii = one_hot_to_ascii_level(lev, tok)
         length, height = len(slice_ascii[0]) - 1, len(slice_ascii)
 
+        for height, line in enumerate(slice_ascii):
+            for length, tok in enumerate(line):
+                if tok == 'M' or tok == 'F':
+                    tmp_slice = list(slice_ascii[height])
+                    tmp_slice[length] = '-'
+                    slice_ascii[height] = "".join(tmp_slice)
+
         genpath = os.path.join(folder, "gen/")
         if not os.path.exists(genpath):
             os.makedirs(genpath)
-        spawn_thread(q, wfc_run, name[:-4], slice_ascii, length, height, 100, genpath).join()
+        spawn_thread(q, wfc_run, name[:-4], slice_ascii, length+1, height+1, 100, genpath).join()
 
     def wfc_recreate():
         da_progressbar['value'] = 0

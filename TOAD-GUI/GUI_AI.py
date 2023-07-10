@@ -717,36 +717,6 @@ def TOAD_GUI():
                     save_slice(bounds, os.path.join(OUT, diff_folder), level_obj.name + "_" + idx)
             set_mario_finish(marfin)
 
-    def ascii_to_image(filepath=None, outpath=None):
-        if outpath is None:
-            outpath = filepath
-        if filepath:
-            folder, name = os.path.split(filepath)
-
-            lev, tok = read_level_from_file(folder, name)
-            slice_ascii = one_hot_to_ascii_level(lev, tok)
-
-            ImgGen.render(slice_ascii).save(outpath.replace(".txt", ".png"))
-        return len(slice_ascii[0])-1, len(slice_ascii)
-
-    def convert_slices_to_images():
-        directory = fd.askdirectory(initialdir=CURDIR)
-        convert_slices_to_images_rec(directory)
-
-    def convert_slices_to_images_rec(directory):
-        for f in os.listdir(directory):
-            filepath = os.path.join(directory, f)
-            if os.path.isdir(filepath):
-                convert_slices_to_images_rec(filepath)
-            elif filepath[-3:] == "txt":
-                outpath = os.path.abspath(filepath).replace(CURDIR, "")
-                outpath = os.path.abspath(OUT[:-1] + outpath)
-                folder, name = os.path.split(outpath)
-                if not os.path.exists(folder):
-                    os.makedirs(folder)
-
-                ascii_to_image(filepath, outpath)
-
     def wfc_run(file_name, ascii_file, length, height, added_progress, outputfolder=OUT):
         wfc_control.execute_wfc(filename=file_name, pattern_width=5, output_size=[length, height],
                                 output_periodic=False, input_periodic=False, logging=True,
@@ -941,7 +911,7 @@ def TOAD_GUI():
                                 text='Extract Slices', command=lambda: spawn_thread(q, diff_slice_folder))
 
     wfc_sample_button = ttk.Button(difficulty_frame, compound='top',  # image=extract_slices_icon,
-                                text='WFC Resample', command=lambda: spawn_thread(q, try_once))
+                                text='WFC Resample', command=lambda: spawn_thread(q, wfc_recreate))
 
     edit_tab = ttk.Frame(settings)
     def on_tab_change(event):
@@ -950,8 +920,115 @@ def TOAD_GUI():
             editmode.set(True)
 
     p_c_tabs.bind('<<NotebookTabChanged>>', on_tab_change)
+
+    # Image Handling
+    def ascii_to_image(filepath=None, outpath=None):
+        if outpath is None:
+            outpath = filepath
+        if filepath:
+            folder, name = os.path.split(filepath)
+
+            lev, tok = read_level_from_file(folder, name)
+            slice_ascii = one_hot_to_ascii_level(lev, tok)
+
+            ImgGen.render(slice_ascii).save(outpath.replace(".txt", ".png"))
+        return len(slice_ascii[0])-1, len(slice_ascii)
+
+    def convert_slices_to_images():
+        directory = fd.askdirectory(initialdir=CURDIR)
+        convert_slices_to_images_rec(directory)
+
+    def convert_slices_to_images_rec(directory):
+        for f in os.listdir(directory):
+            filepath = os.path.join(directory, f)
+            if os.path.isdir(filepath):
+                convert_slices_to_images_rec(filepath)
+            elif filepath[-3:] == "txt":
+                outpath = os.path.abspath(filepath).replace(CURDIR, "")
+                outpath = os.path.abspath(OUT[:-1] + outpath)
+                folder, name = os.path.split(outpath)
+                if not os.path.exists(folder):
+                    os.makedirs(folder)
+
+                ascii_to_image(filepath, outpath)
+
+
+    left_comp_list = []
+    right_comp_list = []
+    comp_list_idx = 0
+
+    def compswitch(val):
+        nonlocal comp_list_idx
+        comp_list_idx += val
+
+        if comp_list_idx >= len(left_comp_list):
+            comp_list_idx = 0
+        elif comp_list_idx < 0:
+            comp_list_idx = len(left_comp_list) - 1
+
+        error_msg.set(f"Showing source  {comp_list_idx}: {left_comp_list[comp_list_idx]}")
+        img = Image.open(left_comp_list[comp_list_idx])
+        img = ImageTk.PhotoImage(img)
+        image_label.change_image(img)
+
+        img = Image.open(right_comp_list[comp_list_idx])
+        img = ImageTk.PhotoImage(img)
+        image_label2.change_image(img)
+
+    def comp_gen_imgs():
+        nonlocal left_comp_list
+        nonlocal right_comp_list
+        nonlocal comp_list_idx
+        image_label2.grid(column=2, row=6, columnspan=4, sticky=(N, E, W), padx=5, pady=8)
+
+        directory = fd.askdirectory(initialdir=CURDIR)
+        convert_slices_to_images_rec(directory)
+
+        directory = os.path.abspath(directory).replace(CURDIR, "")
+        directory = os.path.abspath(OUT[:-1] + directory)
+
+        # Get Source Images
+        left_comp_list = [os.path.join(directory, fname) for fname in os.listdir(directory)
+                          if not os.path.isdir(os.path.join(directory, fname))]
+
+        # Get WFC generated Image out of gen folder
+        gendir = os.path.join(directory, "gen/")
+        right_comp_list = [os.path.join(gendir, fname) for fname in os.listdir(gendir)]
+        # Only comparable where an image was generated from an original
+        left_comp_list = [img for img in left_comp_list if os.path.split(img)[1][:-4] in "".join(right_comp_list)]
+
+        if len(left_comp_list) != len(right_comp_list):
+            print("Error")
+        compswitch(0)
+
+    def end_comparison():
+        image_label2.grid_remove()
+        if level_obj.image:
+            image_label.change_image(level_obj.image)
+        else:
+            image_label.change_image(levelimage)
+
     # Level Preview image
     image_label = ScrollableImage(settings, image=levelimage, height=271)
+    image_label2 = ScrollableImage(settings)
+
+    # Compare Mode
+    comp_frame = ttk.Frame(settings)
+    p_c_tabs.add(comp_frame, text="Comp Gen")
+
+
+    comp_folder_button = ttk.Button(comp_frame, compound='top',
+                                      text='Open Source Folder', command=lambda: spawn_thread(q, comp_gen_imgs))
+
+    end_comp_button = ttk.Button(comp_frame, compound='top',
+                                      text='End Comparison', command=lambda: spawn_thread(q, end_comparison))
+
+    next_comp_button = ttk.Button(comp_frame, compound='top',
+                                      text='Next Comparison ->', command=lambda: spawn_thread(q, compswitch, 1))
+    prev_comp_button = ttk.Button(comp_frame, compound='top',
+                                      text='<- Previous Comparison', command=lambda: spawn_thread(q, compswitch, -1))
+
+
 
     # Token edit function
     def change_token(tok, x, y):
@@ -1071,6 +1148,12 @@ def TOAD_GUI():
     da_progressbar.grid(column=0, row=1, columnspan=6, sticky=(S), padx=5, pady=5)
     slice_extract_button.grid(column=5, row=1, sticky=(N))
     wfc_sample_button.grid(column=4, row=1, sticky=(N))
+
+    # On comp_frame
+    comp_folder_button.grid(column=0, row=0, sticky=(N, S, E, W), padx=5, pady=5)
+    end_comp_button.grid(column=0, row=1, sticky=(N, S, E, W), padx=5, pady=5)
+    next_comp_button.grid(column=2, row=0, sticky=(N, S, E, W), padx=5, pady=5)
+    prev_comp_button.grid(column=1, row=0, sticky=(N, S, E, W), padx=5, pady=5)
 
     # Column/Rowconfigure
     root.columnconfigure(0, weight=1)

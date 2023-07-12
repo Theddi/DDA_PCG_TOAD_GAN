@@ -870,6 +870,18 @@ def TOAD_GUI():
                                                   text='Use selected AI',
                                                   command=ai_switch,
                                                   variable=use_selected_ai)
+    # Frame displaying the Game's controls
+    controls_frame = ttk.LabelFrame(p_c_frame, padding=(5, 5, 5, 5), text='Controls')
+    contr_a = ttk.Label(controls_frame, text=' a :')
+    contr_s = ttk.Label(controls_frame, text=' s :')
+    contr_l = ttk.Label(controls_frame, text='<- :')
+    contr_r = ttk.Label(controls_frame, text='-> :')
+
+    descr_a = ttk.Label(controls_frame, text='Sprint/Throw Fireball')
+    descr_s = ttk.Label(controls_frame, text='Jump')
+    descr_l = ttk.Label(controls_frame, text='Move left')
+    descr_r = ttk.Label(controls_frame, text='Move right')
+
     # Difficulty Adjustment Notebook Tab
     difficulty_frame = ttk.Frame(settings)
     p_c_tabs.add(difficulty_frame, text="Difficulty Adjustment")
@@ -905,13 +917,12 @@ def TOAD_GUI():
                                              command=d_slider_changed, length=250)
     das_value.set(0.000)
 
+    difficulty_adjustment_button = ttk.Button(difficulty_frame, compound='top',  # image=iterate_level_icon,
+                                text='Difficulty Adjustment', state='disabled')
+                                # command=lambda: spawn_thread(q, ai_iterate_level)
+
+
     da_progressbar = tkinter.ttk.Progressbar(difficulty_frame, orient='horizontal', mode='determinate', length=800)
-
-    slice_extract_button = ttk.Button(difficulty_frame, compound='top', image=extract_slices_icon,
-                                text='Extract Slices', command=lambda: spawn_thread(q, diff_slice_folder))
-
-    wfc_sample_button = ttk.Button(difficulty_frame, compound='top',  # image=extract_slices_icon,
-                                text='WFC Resample', command=lambda: spawn_thread(q, wfc_recreate))
 
     edit_tab = ttk.Frame(settings)
     def on_tab_change(event):
@@ -1014,20 +1025,37 @@ def TOAD_GUI():
 
     # Compare Mode
     comp_frame = ttk.Frame(settings)
+    comp_label_frame = ttk.LabelFrame(comp_frame, padding=(5, 5, 5, 5), text='Comparison')
+    generation_label_frame = ttk.LabelFrame(comp_frame, padding=(5, 5, 5, 5), text='Generation')
     p_c_tabs.add(comp_frame, text="Comp Gen")
 
+    comp_folder_button = ttk.Button(comp_label_frame, compound='top',
+                                    text='Open Source Folder', command=lambda: spawn_thread(q, comp_gen_imgs))
+    comp_tooltip = Tooltip(comp_folder_button, text="Compare level files and it's \"WFC Resample\" variant",
+                           wraplength=250, bg="white")
 
-    comp_folder_button = ttk.Button(comp_frame, compound='top',
-                                      text='Open Source Folder', command=lambda: spawn_thread(q, comp_gen_imgs))
+    end_comp_button = ttk.Button(comp_label_frame, compound='top',
+                                 text='End Comparison', command=lambda: spawn_thread(q, end_comparison))
+    end_comp_tooltip = Tooltip(end_comp_button, text="Close 2nd image field",
+                               wraplength=250, bg="white")
 
-    end_comp_button = ttk.Button(comp_frame, compound='top',
-                                      text='End Comparison', command=lambda: spawn_thread(q, end_comparison))
+    next_comp_button = ttk.Button(comp_label_frame, compound='top',
+                                  text='Next Comparison ->', command=lambda: spawn_thread(q, compswitch, 1))
+    prev_comp_button = ttk.Button(comp_label_frame, compound='top',
+                                  text='<- Previous Comparison', command=lambda: spawn_thread(q, compswitch, -1))
 
-    next_comp_button = ttk.Button(comp_frame, compound='top',
-                                      text='Next Comparison ->', command=lambda: spawn_thread(q, compswitch, 1))
-    prev_comp_button = ttk.Button(comp_frame, compound='top',
-                                      text='<- Previous Comparison', command=lambda: spawn_thread(q, compswitch, -1))
+    slice_extract_button = ttk.Button(generation_label_frame, compound='top', image=extract_slices_icon,
+                                text='Extract Slices', command=lambda: spawn_thread(q, diff_slice_folder))
+    ext_tooltip = Tooltip(slice_extract_button,
+                          text="Extract slices from all levels of a folder and sort them for difficulty",
+                          wraplength=250, bg="white")
 
+    wfc_sample_button = ttk.Button(generation_label_frame, compound='top',  # image=extract_slices_icon,
+                                text='WFC Resample', command=lambda: spawn_thread(q, wfc_recreate))
+    wfc_tooltip = Tooltip(wfc_sample_button,
+                          text="Use WFC on all mario levels in all subfolders of the selected directory, "
+                               "save generated levels in the gen/ directory of original contained subfolder",
+                          wraplength=250, bg="white")
 
 
     # Token edit function
@@ -1080,18 +1108,6 @@ def TOAD_GUI():
 
     is_loaded.trace("w", callback=set_play_state)
 
-    # Frame displaying the Game's controls
-    controls_frame = ttk.LabelFrame(p_c_frame, padding=(5, 5, 5, 5), text='Controls')
-    contr_a = ttk.Label(controls_frame, text=' a :')
-    contr_s = ttk.Label(controls_frame, text=' s :')
-    contr_l = ttk.Label(controls_frame, text='<- :')
-    contr_r = ttk.Label(controls_frame, text='-> :')
-
-    descr_a = ttk.Label(controls_frame, text='Sprint/Throw Fireball')
-    descr_s = ttk.Label(controls_frame, text='Jump')
-    descr_l = ttk.Label(controls_frame, text='Move left')
-    descr_r = ttk.Label(controls_frame, text='Move right')
-
     error_label = ttk.Label(settings, textvariable=error_msg)
 
     # ---------------------------------------- Grid Layout ----------------------------------------
@@ -1136,24 +1152,27 @@ def TOAD_GUI():
     descr_r.grid(column=1, row=3, sticky=(N, S, W), padx=1, pady=1)
 
     # On difficulty_frame
-    iterate_button.grid(column=0, row=0, sticky=(N, S, E, W), padx=5, pady=5)
-    slice_its_label.grid(column=2, row=0, sticky=(N, W), padx=5, pady=5)
-    slice_its_entry.grid(column=3, row=0, sticky=(N), padx=5, pady=5)
-    slice_length_label.grid(column=2, row=0, sticky=(W), padx=5, pady=5)
-    slice_length_entry.grid(column=3, row=0, padx=5, pady=5)
-    current_difficulty_label.grid(column=0, row=1, columnspan=4, sticky=(N), padx=5, pady=5)
-    das_label.grid(column=4, row=0, sticky=(N), padx=5, pady=5)
-    das_value_entry.grid(column=5, row=0, sticky=(N), padx=5, pady=5)
-    difficulty_adjustment_slider.grid(column=4, row=0, columnspan=3, pady=5)
-    da_progressbar.grid(column=0, row=1, columnspan=6, sticky=(S), padx=5, pady=5)
-    slice_extract_button.grid(column=5, row=1, sticky=(N))
-    wfc_sample_button.grid(column=4, row=1, sticky=(N))
+    iterate_button.grid(column=0, row=0, columnspan=3, rowspan=3, sticky=(N, S, E, W), padx=5, pady=5)
+    slice_its_label.grid(column=3, row=0, sticky=(W), padx=5, pady=5)
+    slice_its_entry.grid(column=3, row=0, sticky=(E), padx=5, pady=5)
+    slice_length_label.grid(column=3, row=1, sticky=(W), padx=5, pady=5)
+    slice_length_entry.grid(column=3, row=1, padx=5, sticky=(E), pady=5)
+    current_difficulty_label.grid(column=0, row=3, columnspan=3, sticky=(N), padx=5, pady=5)
+    das_label.grid(column=4, row=0, padx=5, pady=5)
+    das_value_entry.grid(column=5, row=0, padx=5, pady=5)
+    difficulty_adjustment_slider.grid(column=4, row=1, columnspan=3, pady=5)
+    difficulty_adjustment_button.grid(column=4, row=2, columnspan=3, padx=5, pady=5)
+    da_progressbar.grid(column=0, row=4, columnspan=6, sticky=(S), padx=5, pady=5)
 
     # On comp_frame
+    comp_label_frame.grid(column=0, row=0, columnspan=3, rowspan=2, sticky=(N, S, E, W), padx=5, pady=5)
+    generation_label_frame.grid(column=3, row=0, columnspan=2, rowspan=2, sticky=(N, S, E, W), padx=5, pady=5)
     comp_folder_button.grid(column=0, row=0, sticky=(N, S, E, W), padx=5, pady=5)
     end_comp_button.grid(column=0, row=1, sticky=(N, S, E, W), padx=5, pady=5)
     next_comp_button.grid(column=2, row=0, sticky=(N, S, E, W), padx=5, pady=5)
     prev_comp_button.grid(column=1, row=0, sticky=(N, S, E, W), padx=5, pady=5)
+    slice_extract_button.grid(column=0, row=0)
+    wfc_sample_button.grid(column=1, row=0)
 
     # Column/Rowconfigure
     root.columnconfigure(0, weight=1)
@@ -1186,7 +1205,7 @@ def TOAD_GUI():
     controls_frame.rowconfigure(2, weight=1)
     controls_frame.rowconfigure(3, weight=1)
 
-    difficulty_frame.columnconfigure(0, weight=3)
+    difficulty_frame.columnconfigure(0, weight=1)
     difficulty_frame.columnconfigure(1, weight=1)
     difficulty_frame.columnconfigure(2, weight=1)
     difficulty_frame.columnconfigure(3, weight=1)

@@ -740,12 +740,14 @@ def TOAD_GUI():
                         save_slice(bounds, os.path.join(OUT, diff_folder), level_obj.name + "_" + idx)
                 set_mario_finish(marfin)
 
-    def wfc_run(file_name, ascii_file, length, height, added_progress, outputfolder=OUT):
-        wfc_control.execute_wfc(filename=file_name, pattern_width=5, output_size=[length, height],
+    def wfc_run(file_name, ascii_file, length, height, added_progress, outputfolder=OUT, bounds=None):
+        result = wfc_control.execute_wfc(filename=file_name, pattern_width=patwidth_value.get(), output_size=[length, height],
                                 output_periodic=False, input_periodic=False, logging=True,
                                 output_destination=outputfolder, ground=3, sky=True, rotations=1,
-                                mario_version=True, ascii_file=ascii_file, backtracking=True)
+                                mario_version=True, ascii_file=ascii_file, backtracking=True, bounds=bounds,
+                                fix_outer_bounds=True)
         da_progressbar['value'] += added_progress
+        return result
 
     def try_once():
         folder, name = os.path.split(r"C:\Studium\Bachelorarbeit_save\DDA_PCG_TOAD_GAN\TOAD-GUI\levels\originals\lvl_6-2.txt")
@@ -763,7 +765,7 @@ def TOAD_GUI():
         genpath = os.path.join(folder, "gen/")
         if not os.path.exists(genpath):
             os.makedirs(genpath)
-        spawn_thread(q, wfc_run, name[:-4], slice_ascii, length+1, height+1, 100, genpath).join()
+        spawn_thread(q, wfc_run, name[:-4], slice_ascii, 24, height+1, 100, genpath, (8, 55)).join()
 
     def wfc_recreate():
         da_progressbar['value'] = 0
@@ -797,7 +799,8 @@ def TOAD_GUI():
         #print(sl, file=sys.stderr)
         if level_obj.is_sliced:
             for slice_num in range(len(level_obj.slices)):
-                print(slice_num, file=sys.stderr)
+                print(slice_num, file=sys.stderr, end=": ")
+                print(level_obj.slices[slice_num], file=sys.stderr)
 
     # ---------------------------------------- Layout ----------------------------------------
 
@@ -947,6 +950,11 @@ def TOAD_GUI():
                                              command=d_slider_changed, length=250)
     das_value.set(0.000)
 
+    patwidth_value = IntVar()
+    patwidth_value_entry = ttk.Entry(difficulty_frame, textvariable=patwidth_value, width=2)
+    patwidth_label = ttk.Label(difficulty_frame, text="Pattern Width NxN, N:")
+    patwidth_value.set(5)
+
     difficulty_adjustment_button = ttk.Button(difficulty_frame, compound='top',  # image=iterate_level_icon,
                                               text='Difficulty Adjustment', state='disabled',
                                               command=lambda: spawn_thread(q, difficulty_adjust))
@@ -1090,7 +1098,7 @@ def TOAD_GUI():
                           wraplength=250, bg="white")
 
     wfc_sample_button = ttk.Button(generation_label_frame, compound='top',  # image=extract_slices_icon,
-                                text='WFC Resample', command=lambda: spawn_thread(q, wfc_recreate))
+                                text='WFC Resample', command=lambda: spawn_thread(q, try_once))
     wfc_tooltip = Tooltip(wfc_sample_button,
                           text="Use WFC on all mario levels in all subfolders of the selected directory, "
                                "save generated levels in the gen/ directory of original contained subfolder",
@@ -1200,7 +1208,9 @@ def TOAD_GUI():
     das_label.grid(column=4, row=0, padx=5, pady=5)
     das_value_entry.grid(column=5, row=0, padx=5, pady=5)
     difficulty_adjustment_slider.grid(column=4, row=1, columnspan=3, pady=5)
-    difficulty_adjustment_button.grid(column=4, row=2, columnspan=3, padx=5, pady=5)
+    patwidth_label.grid(column=4, row=2, padx=5, pady=5)
+    patwidth_value_entry.grid(column=5, row=2, padx=5, pady=5)
+    difficulty_adjustment_button.grid(column=4, row=3, columnspan=3, padx=5, pady=5)
     da_progressbar.grid(column=0, row=4, columnspan=6, sticky=(S), padx=5, pady=5)
 
     # On comp_frame

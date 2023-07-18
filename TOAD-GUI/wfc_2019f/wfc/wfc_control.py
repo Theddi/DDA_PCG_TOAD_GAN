@@ -330,7 +330,7 @@ def execute_wfc(
 
     # Fixate outer bounds if set
     bound_list: Optional[NDArray[np.int64]] = None
-    if fix_outer_bounds:
+    if fix_outer_bounds and bounds is not None:
         bound_list = np.vectorize(lambda x: encode_patterns[x])(
             pattern_grid[:, :fixation]
         )

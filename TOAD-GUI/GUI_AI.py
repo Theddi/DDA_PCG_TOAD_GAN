@@ -68,7 +68,8 @@ genName = ""
 
 # Object holding important data about the current level
 class LevelObject:
-    def __init__(self, ascii_level, oh_level, image, tokens, scales, noises, name=""):
+    def __init__(self, ascii_level, oh_level, image, tokens, scales, noises,
+                 name="", is_sliced = False, diff_df = None, slices = []):
         self.ascii_level = ascii_level
         self.oh_level = oh_level  # one-hot encoded
         self.image = image
@@ -76,6 +77,9 @@ class LevelObject:
         self.scales = scales
         self.noises = noises
         self.name = name
+        self.is_sliced = is_sliced
+        self.diff_df = diff_df
+        self.slices = slices
 
     def save(self, into):
         into.oh_level = self.oh_level
@@ -85,6 +89,9 @@ class LevelObject:
         into.scales = self.scales
         into.noises = self.noises
         into.tokens = self.tokens
+        into.is_sliced = self.is_sliced
+        into.diff_df = self.diff_df
+        into.slices = self.slices
 
     def restore(self, from_):
         self.oh_level = from_.oh_level
@@ -94,6 +101,9 @@ class LevelObject:
         self.scales = from_.scales
         self.noises = from_.noises
         self.tokens = from_.tokens
+        self.is_sliced = from_.is_sliced
+        self.diff_df = from_.diff_df
+        self.slices = from_.slices
 
 # Main GUI code
 def TOAD_GUI():
@@ -170,6 +180,8 @@ def TOAD_GUI():
     q = queue.Queue()
 
     current_completion = IntVar()
+    # Difficulty Determination and Values
+    is_determined = BooleanVar()
 
     # Set values
     current_completion.set(1)
@@ -181,6 +193,7 @@ def TOAD_GUI():
     error_msg.set("No Errors")
     use_gen.set(False)
     is_loaded.set(False)
+    is_determined.set(False)
 
     # ---------------------------------------- Define Callbacks ----------------------------------------
     def load_level():
@@ -201,7 +214,6 @@ def TOAD_GUI():
                 level_path.set(fname)
                 folder, lname = os.path.split(fname)
                 level_obj.name = lname.replace(".txt", "")
-
                 # Load level
                 lev, tok = read_level_from_file(folder, lname)
 
@@ -223,6 +235,7 @@ def TOAD_GUI():
                 level_obj.scales = None
                 level_obj.noises = None
 
+                level_obj.is_sliced = False
                 level_l.set(lev.shape[-1])
                 level_h.set(lev.shape[-2])
 
@@ -317,6 +330,8 @@ def TOAD_GUI():
             level_obj.scales = scales
             level_obj.noises = noises
 
+            level_obj.is_sliced = False
+
             level_obj.ascii_level = one_hot_to_ascii_level(level, toadgan_obj.token_list)
             redraw_image()
 
@@ -378,7 +393,7 @@ def TOAD_GUI():
             image_label.change_image(level_obj.image)
 
     def play_level(ai_select="Human", loop=False, playtime=30, visuals=True,
-                   multicall=False, baselevel=None, slice_name=level_obj.name):
+                   multicall=False, baselevel=None, slice_name=level_obj.name, hardkill=True):
         ai = ai_select
         if not multicall:
             error_msg.set("Playing level...")
@@ -483,8 +498,9 @@ def TOAD_GUI():
         finally:
             pid = gateway.java_process.pid
             gateway.shutdown()
-            # TODO Generalize for other os than windows
-            os.system("taskkill /f /pid %d /t" % pid)
+            if hardkill:
+                # TODO Generalize for other os than windows
+                os.system("taskkill /f /pid %d /t" % pid)
 
             if not multicall:
                 is_loaded.set(True)
@@ -565,6 +581,7 @@ def TOAD_GUI():
         remGen = use_gen.get()
         is_loaded.set(False)
         editmode.set(False)
+        is_determined.set(False)
         threads = []
         standard_agent_time = 10
         error_msg.set("Iterating...")
@@ -634,8 +651,8 @@ def TOAD_GUI():
                 s = "Current length %s is not full slice length %s", \
                     str(flagcoord[1]-mariocoord[1]+1), slice_length_var.get()
                 error_msg.set(s)
-                print(s)
-                print(level_obj.ascii_level)
+                print(s, file=sys.stderr)
+                print(level_obj.ascii_level, file=sys.stderr)
 
             slicenumber = "%03d" % sliceCounter
             is_loaded.set(False)
@@ -684,11 +701,16 @@ def TOAD_GUI():
                                        y="difficulty_score", ylabel="Difficulty", kind="bar").get_figure()
         fig.savefig(OUT+"Difficulty_Plot.png")
 
+        # Save slice information into level object
+        level_obj.is_sliced = True
+        level_obj.diff_df = slice_difficulty_df
+        level_obj.slices = slices
+
         error_msg.set("Iterating Finished")
         use_gen.set(remGen)
         is_loaded.set(True)
-
-        return slice_difficulty_df, slices
+        is_determined.set(True)
+        return
 
     def save_slice(bounds, folder=OUT, name="slice"):
         slice_ascii = []
@@ -706,16 +728,17 @@ def TOAD_GUI():
         levels = [os.path.join(d, f) for f in os.listdir(d) if f[-3:] == "txt"]
         for l in levels:
             load_level_by_path(l)
-            dataframe, slice_boundaries = ai_iterate_level("results")
-            marfin = delete_mario_finish()
-            for idx in dataframe.index:
-                if idx.isnumeric():
-                    # Gets x boundaries of slice
-                    bounds = slice_boundaries[int(idx)-1][0][1], slice_boundaries[int(idx)-1][1][1]
-                    # Safe folder for slice of difficulty: 0.2521 -> 025/ ; 1.7986 -> 179/
-                    diff_folder = "%03d/" % math.floor(dataframe['difficulty_score'].loc[idx] * 100)
-                    save_slice(bounds, os.path.join(OUT, diff_folder), level_obj.name + "_" + idx)
-            set_mario_finish(marfin)
+            ai_iterate_level("results")
+            if level_obj.is_sliced:
+                marfin = delete_mario_finish()
+                for idx in level_obj.diff_df.index:
+                    if idx.isnumeric():
+                        # Gets x boundaries of slice
+                        bounds = level_obj.slices[int(idx)-1][0][1], level_obj.slices[int(idx)-1][1][1]
+                        # Safe folder for slice of difficulty: 0.2521 -> 025/ ; 1.7986 -> 179/
+                        diff_folder = "%03d/" % math.floor(level_obj.diff_df['difficulty_score'].loc[idx] * 100)
+                        save_slice(bounds, os.path.join(OUT, diff_folder), level_obj.name + "_" + idx)
+                set_mario_finish(marfin)
 
     def wfc_run(file_name, ascii_file, length, height, added_progress, outputfolder=OUT):
         wfc_control.execute_wfc(filename=file_name, pattern_width=5, output_size=[length, height],
@@ -769,6 +792,13 @@ def TOAD_GUI():
         for t in threads:
             t.join()
         da_progressbar['value'] = 100
+
+    def difficulty_adjust():
+        #print(sl, file=sys.stderr)
+        if level_obj.is_sliced:
+            for slice_num in range(len(level_obj.slices)):
+                print(slice_num, file=sys.stderr)
+
     # ---------------------------------------- Layout ----------------------------------------
 
     settings = ttk.Frame(root, padding=(15, 15, 15, 15), width=1000, height=1000)  # Main Frame
@@ -918,11 +948,20 @@ def TOAD_GUI():
     das_value.set(0.000)
 
     difficulty_adjustment_button = ttk.Button(difficulty_frame, compound='top',  # image=iterate_level_icon,
-                                text='Difficulty Adjustment', state='disabled')
-                                # command=lambda: spawn_thread(q, ai_iterate_level)
+                                              text='Difficulty Adjustment', state='disabled',
+                                              command=lambda: spawn_thread(q, difficulty_adjust))
 
 
     da_progressbar = tkinter.ttk.Progressbar(difficulty_frame, orient='horizontal', mode='determinate', length=800)
+
+    def set_diff_button_state(t1, t2, t3):
+        if is_determined.get():
+            difficulty_adjustment_button.state(['!disabled'])
+        else:
+            difficulty_adjustment_button.state(['disabled'])
+        return
+
+    is_determined.trace("w", callback=set_diff_button_state)
 
     edit_tab = ttk.Frame(settings)
     def on_tab_change(event):

@@ -53,13 +53,8 @@ def make_tile_catalog(
     return tile_catalog, tile_grid, code_list, unique_tiles
 
 
-def make_mario_catalog(ascii_file
+def make_mario_catalog(ascii_list
 ) -> Tuple[NDArray[np.byte], NDArray[np.byte], NDArray[np.byte], Tuple[NDArray[np.int64], NDArray[np.int64]]]:
-    ascii_list = [list(row) for row in ascii_file]
-    for row in ascii_list:
-        if '\n' in row:
-            row.remove('\n')
-    ascii_list = [[ord(tok) for tok in row] for row in ascii_list]
     tile_grid = np.array(ascii_list)
     code_list: NDArray[np.int64] = tile_grid.flatten()
     unique_tiles: Tuple[NDArray[np.byte], NDArray[np.int32]] = np.unique(tile_grid, return_counts=True)

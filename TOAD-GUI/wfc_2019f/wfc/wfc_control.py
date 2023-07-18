@@ -106,7 +106,9 @@ def execute_wfc(
     output_destination = r"./output/",
     input_folder = r"./images/samples/",
     mario_version = False,
-    ascii_file = None
+    ascii_file = None,
+    bounds = None,
+    fix_outer_bounds = False
 ) -> NDArray[np.integer]:
     timecode = datetime.datetime.now().isoformat().replace(":", ".")
     time_begin = time.perf_counter()
@@ -141,8 +143,16 @@ def execute_wfc(
     if image is None and not mario_version:
         raise TypeError("An image must be given.")
 
+    fixation = None
     if ascii_file is None and mario_version:
         raise TypeError("An ascii file must be given.")
+    elif bounds is not None and mario_version:
+        if bounds[0] < 0 or bounds[0] >= len(ascii_file[0]):
+            raise TypeError("Starting bounds out of Boundary")
+        if bounds[1] < 0 or bounds[1] >= len(ascii_file[0]):
+            raise TypeError("Ending bounds out of Boundary")
+        if bounds[1] <= bounds[0]:
+            raise TypeError("Non-Valid boundary")
 
     # TODO: generalize this to more than the four cardinal directions
     direction_offsets = list(enumerate([(0, -1), (1, 0), (0, 1), (-1, 0)]))
@@ -158,7 +168,30 @@ def execute_wfc(
             tile_grid, pattern_width, input_is_periodic=input_periodic, rotations=rotations
         )
     else:
-        tile_grid, _code_list, _unique_tiles = make_mario_catalog(ascii_file)
+        # Convert ascii_file to list
+        ascii_list = [list(row) for row in ascii_file]
+        for row in ascii_list:
+            if '\n' in row:
+                row.remove('\n')
+        ascii_list = [[ord(tok) for tok in row] for row in ascii_list]
+
+        # Limit ascii_list to bounds, if given
+        if bounds:
+            if fix_outer_bounds:
+                fixation = pattern_width - 1
+                starting_bound = max(bounds[0] - fixation, 0)
+                ending_bound = min(bounds[1] + fixation, len(ascii_list[0]) - 1) + 1
+                output_size[0] += 2 * fixation
+                #print(fixation, starting_bound, ending_bound)
+            else:
+                starting_bound = bounds[0]
+                ending_bound = bounds[1]
+
+            ascii_list = [row[starting_bound:ending_bound] for row in ascii_list]
+
+        for row in [[chr(tok) for tok in row] for row in ascii_list]:
+            print(row)
+        tile_grid, _code_list, _unique_tiles = make_mario_catalog(ascii_list)
         (
             pattern_catalog,
             pattern_weights,
@@ -236,7 +269,7 @@ def execute_wfc(
 
     time_adjacency = time.perf_counter()
 
-    ### Ground and Sky###
+    ### Ground and Sky ###
     ''' Ground defines all patterns currently at Ground level edge which is determined by direction: e.g. 3 = Down
         If Sky is set, opposite edge is fixed too
     '''
@@ -295,8 +328,19 @@ def execute_wfc(
                 output_filename=f"visualization/patterns_ground_{filename}_{timecode}",
             )
 
+    # Fixate outer bounds if set
+    bound_list: Optional[NDArray[np.int64]] = None
+    if fix_outer_bounds:
+        bound_list = np.vectorize(lambda x: encode_patterns[x])(
+            pattern_grid[:, :fixation]
+        )
+        bound_list2 = np.vectorize(lambda x: encode_patterns[x])(
+            pattern_grid[:, -fixation:]
+        )
+        bound_list = np.concatenate((bound_list, bound_list2), axis=1)
+
     wave = makeWave(
-        number_of_patterns, output_size[0], output_size[1], ground=ground_list, sky=sky_list
+        number_of_patterns, output_size[0], output_size[1], fixation, ground=ground_list, sky=sky_list, bound=bound_list
     )
 
     adjacency_matrix = makeAdj(adjacency_list)
@@ -422,6 +466,7 @@ def execute_wfc(
         # with profiler:
         # with PyCallGraph(output=GraphvizOutput(output_file=f"visualization/pycallgraph_{filename}_{timecode}.png")):
         try:
+            print(attempts)
             solution = run(
                 wave.copy(),
                 adjacency_matrix,
@@ -501,6 +546,9 @@ def execute_wfc(
         if solution_tile_grid is not None and not mario_version:
             return tile_grid_to_image(solution_tile_grid, tile_catalog, (tile_size, tile_size))
         if solution_tile_grid is not None and mario_version:
+            sol = list(np.flip(np.rot90(solution_tile_grid, k=1, axes=(0, 1)), axis=0))
+            for row in [[chr(tok) for tok in row] for row in sol]:
+                print(row)
             print("Finish")
             return None
 

@@ -598,7 +598,7 @@ def render_tiles_to_output(
 def save_ascii_solution(tile_grid: NDArray[np.int64],
     output_filename: str,
 ) -> None:
-    tile_grid = np.rot90(tile_grid, k=3, axes=(0, 1))
+    tile_grid = np.flip(np.rot90(tile_grid, k=1, axes=(0, 1)), axis=0)
     with open(output_filename, 'w') as file:
         for idx, row in enumerate(tile_grid):
             for ch in row:

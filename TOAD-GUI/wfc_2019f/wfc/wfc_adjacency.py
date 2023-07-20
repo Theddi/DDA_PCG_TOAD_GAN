@@ -45,10 +45,10 @@ def adjacency_extraction(
         return res
 
     pattern_list = list(pattern_catalog.keys())
-    legal = []
+    legal = set()
     for pattern_1 in pattern_list:
         for pattern_2 in pattern_list:
             for _direction_index, direction in direction_offsets:
                 if is_valid_overlap_xy(direction, pattern_1, pattern_2):
-                    legal.append((direction, pattern_1, pattern_2))
+                    legal.add((direction, pattern_1, pattern_2))
     return legal

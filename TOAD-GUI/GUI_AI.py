@@ -39,6 +39,8 @@ if not pathExist:
     os.makedirs(OUT)
 # Path for game results
 GAME_RESULT_PATH = os.path.join(OUT, "results.txt")
+# Difficulty slice folder
+DIFF_FOLDER_PATH = os.path.join(CURDIR, "levels/difficulty_slices/")
 # Lock file extension
 LOCK_EXT = ".lock"
 
@@ -712,6 +714,12 @@ def TOAD_GUI():
         is_determined.set(True)
         return
 
+    def get_slice(bounds, ascii_level=level_obj.ascii_level):
+        slice_ascii = []
+        for row in ascii_level:
+            slice_ascii.append(row[bounds[0]:bounds[1]+1])
+        return slice_ascii
+
     def save_slice(bounds, folder=OUT, name="slice"):
         slice_ascii = []
         if not os.path.exists(folder):
@@ -740,12 +748,19 @@ def TOAD_GUI():
                         save_slice(bounds, os.path.join(OUT, diff_folder), level_obj.name + "_" + idx)
                 set_mario_finish(marfin)
 
-    def wfc_run(file_name, ascii_file, length, height, added_progress, outputfolder=OUT, bounds=None):
-        result = wfc_control.execute_wfc(filename=file_name, pattern_width=patwidth_value.get(), output_size=[length, height],
-                                output_periodic=False, input_periodic=False, logging=True,
-                                output_destination=outputfolder, ground=3, sky=True, rotations=1,
-                                mario_version=True, ascii_file=ascii_file, backtracking=True, bounds=bounds,
-                                fix_outer_bounds=True)
+    def replace_slice(bounds, newslice, ascii_level=level_obj.ascii_level):
+        for h in range(len(ascii_level)):
+            ascii_level[h] = newslice[h].join([ascii_level[h][:bounds[0]], ascii_level[h][bounds[1]+1:]])
+
+    def wfc_run(file_name, ascii_file, length, height, added_progress, outputfolder=OUT, bounds=None,
+                difficulty_list=None, choice_heuristic="weighted", location_heuristic="weighted"):
+        result = wfc_control.execute_wfc(
+            filename=file_name, pattern_width=patwidth_value.get(), output_size=[length, height],
+            output_periodic=False, input_periodic=False, logging=True,
+            output_destination=outputfolder, ground=3, sky=True, rotations=1,
+            mario_version=True, ascii_file=ascii_file, backtracking=True, bounds=bounds,
+            fix_outer_bounds=True, difficulty_list=difficulty_list, choice_heuristic=choice_heuristic,
+            loc_heuristic=location_heuristic)
         da_progressbar['value'] += added_progress
         return result
 
@@ -753,7 +768,6 @@ def TOAD_GUI():
         folder, name = os.path.split(r"C:\Studium\Bachelorarbeit_save\DDA_PCG_TOAD_GAN\TOAD-GUI\levels\originals\lvl_6-2.txt")
         lev, tok = read_level_from_file(folder, name)
         slice_ascii = one_hot_to_ascii_level(lev, tok)
-        length, height = len(slice_ascii[0]) - 1, len(slice_ascii)
 
         for height, line in enumerate(slice_ascii):
             for length, tok in enumerate(line):
@@ -765,7 +779,25 @@ def TOAD_GUI():
         genpath = os.path.join(folder, "gen/")
         if not os.path.exists(genpath):
             os.makedirs(genpath)
-        spawn_thread(q, wfc_run, name[:-4], slice_ascii, 24, height+1, 100, genpath, (8, 55)).join()
+
+        difficulty = "013"
+        diff_folder = {f: os.path.join(DIFF_FOLDER_PATH, f) for f in os.listdir(DIFF_FOLDER_PATH)}
+        levels = [os.path.join(diff_folder[difficulty], f) for f in os.listdir(diff_folder[difficulty])]
+
+        difficulty_list = []
+        for level in levels:
+            f, n = os.path.split(level)
+            lev, tok = read_level_from_file(f, n)
+            difficulty_list.append(one_hot_to_ascii_level(lev, tok))
+
+        bounds = 40, 64
+        inbounds = bounds[0] - 4, bounds[1] + 4
+        ImgGen.render(get_slice(inbounds, slice_ascii)).show("3_original")
+        result = wfc_run("gen_testlevel", slice_ascii, slice_length_var.get(),
+                         len(slice_ascii), 100, OUT, bounds, difficulty_list, "random")
+        ImgGen.render(result).show("3_wfc_result")
+        replace_slice(bounds, result, slice_ascii)
+        ImgGen.render(get_slice(inbounds, slice_ascii)).show("3_replace")
 
     def wfc_recreate():
         da_progressbar['value'] = 0
@@ -796,11 +828,17 @@ def TOAD_GUI():
         da_progressbar['value'] = 100
 
     def difficulty_adjust():
-        #print(sl, file=sys.stderr)
+        # print(sl, file=sys.stderr)
         if level_obj.is_sliced:
-            for slice_num in range(len(level_obj.slices)):
-                print(slice_num, file=sys.stderr, end=": ")
-                print(level_obj.slices[slice_num], file=sys.stderr)
+            bounds = level_obj.slices[3][0][1], level_obj.slices[3][1][1]
+            inbounds = bounds[0]-4, bounds[1]+4
+            ImgGen.render(get_slice(inbounds)).show("3_original")
+            result = wfc_run("gen_testlevel", level_obj.ascii_level, slice_length_var.get(),
+                             len(level_obj.ascii_level), 100, OUT, bounds, difficulty_list)
+            ImgGen.render(result).show("3_wfc_result")
+            replace_slice(bounds, result)
+            redraw_image()
+            ImgGen.render(get_slice(inbounds)).show("3_wfc_inplace")
 
     # ---------------------------------------- Layout ----------------------------------------
 

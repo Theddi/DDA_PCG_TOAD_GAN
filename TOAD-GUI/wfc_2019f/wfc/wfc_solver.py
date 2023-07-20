@@ -143,11 +143,11 @@ def makeWave(number_patterns: int, w: int, h: int, f: int, ground: Optional[Iter
 
 
 def makeAdj(
-    adjLists: Mapping[Tuple[int, int], Collection[Iterable[int]]]
+    adjLists: Mapping[Tuple[int, int], Collection[Iterable[int]]],
+    num_patterns: int
 ) -> Dict[Tuple[int, int], NDArray[numpy.bool_]]:
     adjMatrices = {}
     # logger.debug(adjLists)
-    num_patterns = len(list(adjLists.values())[0])
     for d in adjLists:
         m = numpy.zeros((num_patterns, num_patterns), dtype=bool)
         for i, js in enumerate(adjLists[d]):

@@ -502,7 +502,7 @@ def TOAD_GUI():
             gateway.shutdown()
             if hardkill:
                 # TODO Generalize for other os than windows
-                os.system("taskkill /f /pid %d /t" % pid)
+                os.system("taskkill /f /pid %d /t >nul 2>&1" % pid)
 
             if not multicall:
                 is_loaded.set(True)
@@ -578,10 +578,11 @@ def TOAD_GUI():
                     level_obj.ascii_level[height] = "".join(tmp_slice)
         return mar_fin
 
-    def ai_iterate_level(clear="all"):
+    def ai_iterate_level(clear="all", kill=False):
         # Set variables
         remGen = use_gen.get()
         is_loaded.set(False)
+        remEdit = editmode.get()
         editmode.set(False)
         is_determined.set(False)
         threads = []
@@ -591,7 +592,7 @@ def TOAD_GUI():
 
         # Testing full level with strongest ai, to check if it's completable
         current_difficulty_label.config(text="Current Difficulty: playtesting...")
-        testthread = spawn_thread(q, play_level, "astar", False, 60, True, True)
+        testthread = spawn_thread(q, play_level, "astar", False, 60, True, True, None, level_obj.name, kill)
         testthread.join()
 
         current_difficulty_label.config(text="Current Difficulty: determining...")
@@ -661,7 +662,7 @@ def TOAD_GUI():
             for ai in ai_sel_list:
                 # Play level with agent
                 threads.append(
-                    spawn_thread(q, play_level, ai, False, standard_agent_time, False, True, None, slicenumber))
+                    spawn_thread(q, play_level, ai, False, standard_agent_time, False, True, None, slicenumber, kill))
             for thread in threads:
                 thread.join()
             delete_mario_finish()
@@ -694,12 +695,12 @@ def TOAD_GUI():
 
         # Get level difficulty by slice average
         level_difficulty = slice_difficulty_df[['difficulty_score']].mean()[0]
-        slice_difficulty_df = pd.concat([slice_difficulty_df,
+        level_difficulty_df = pd.concat([slice_difficulty_df,
                                          pd.DataFrame([{'difficulty_score': level_difficulty}],
                                                       index = ['Full'], columns = slice_difficulty_df.columns)])
         current_difficulty_value.set(round(level_difficulty, 3))
 
-        fig = slice_difficulty_df.plot(x=slice_difficulty_df.index.name, xlabel="Slice",
+        fig = level_difficulty_df.plot(x=level_difficulty_df.index.name, xlabel="Slice",
                                        y="difficulty_score", ylabel="Difficulty", kind="bar").get_figure()
         fig.savefig(OUT+"Difficulty_Plot.png")
 
@@ -710,15 +711,21 @@ def TOAD_GUI():
 
         error_msg.set("Iterating Finished")
         use_gen.set(remGen)
+        editmode.set(remEdit)
         is_loaded.set(True)
         is_determined.set(True)
         return
 
-    def get_slice(bounds, ascii_level=level_obj.ascii_level):
+    def get_slice(bounds, ascii_level=None):
         slice_ascii = []
-        for row in ascii_level:
-            slice_ascii.append(row[bounds[0]:bounds[1]+1])
-        return slice_ascii
+        if ascii_level is not None:
+            for row in ascii_level:
+                slice_ascii.append(row[bounds[0]:bounds[1]+1])
+            return slice_ascii
+        else:
+            for row in level_obj.ascii_level:
+                slice_ascii.append(row[bounds[0]:bounds[1]+1])
+            return slice_ascii
 
     def save_slice(bounds, folder=OUT, name="slice"):
         slice_ascii = []
@@ -748,12 +755,17 @@ def TOAD_GUI():
                         save_slice(bounds, os.path.join(OUT, diff_folder), level_obj.name + "_" + idx)
                 set_mario_finish(marfin)
 
-    def replace_slice(bounds, newslice, ascii_level=level_obj.ascii_level):
-        for h in range(len(ascii_level)):
-            ascii_level[h] = newslice[h].join([ascii_level[h][:bounds[0]], ascii_level[h][bounds[1]+1:]])
+    def replace_slice(bounds, newslice, ascii_level=None):
+        if ascii_level is not None:
+            for h in range(len(ascii_level)):
+                ascii_level[h] = newslice[h].join([ascii_level[h][:bounds[0]], ascii_level[h][bounds[1]+1:]])
+                return ascii_level
+        else:
+            for h in range(len(level_obj.ascii_level)):
+                level_obj.ascii_level[h] = newslice[h].join([level_obj.ascii_level[h][:bounds[0]], level_obj.ascii_level[h][bounds[1]+1:]])
 
     def wfc_run(file_name, ascii_file, length, height, added_progress, outputfolder=OUT, bounds=None,
-                difficulty_list=None, choice_heuristic="weighted", location_heuristic="weighted"):
+                difficulty_list=None, choice_heuristic="weighted", location_heuristic="entropy"):
         result = wfc_control.execute_wfc(
             filename=file_name, pattern_width=patwidth_value.get(), output_size=[length, height],
             output_periodic=False, input_periodic=False, logging=True,
@@ -827,18 +839,70 @@ def TOAD_GUI():
             t.join()
         da_progressbar['value'] = 100
 
-    def difficulty_adjust():
-        # print(sl, file=sys.stderr)
-        if level_obj.is_sliced:
-            bounds = level_obj.slices[3][0][1], level_obj.slices[3][1][1]
-            inbounds = bounds[0]-4, bounds[1]+4
-            ImgGen.render(get_slice(inbounds)).show("3_original")
-            result = wfc_run("gen_testlevel", level_obj.ascii_level, slice_length_var.get(),
-                             len(level_obj.ascii_level), 100, OUT, bounds, difficulty_list)
-            ImgGen.render(result).show("3_wfc_result")
-            replace_slice(bounds, result)
-            redraw_image()
-            ImgGen.render(get_slice(inbounds)).show("3_wfc_inplace")
+    def difficulty_adjust(delta=.01):
+        error_msg.set("Difficulty adjustment initiated")
+        is_loaded.set(False)
+        diff_comp = abs(current_difficulty_value.get() - das_value.get())
+        while diff_comp > delta:
+            error_msg.set(f"Current difficulty delta {diff_comp} > {delta} to overcome")
+            if level_obj.is_sliced:
+                diff_val = int(das_value.get() * 100)
+                difficulty = "%03d" % diff_val
+                diff_folder = {f: os.path.join(DIFF_FOLDER_PATH, f) for f in os.listdir(DIFF_FOLDER_PATH)}
+                if difficulty in diff_folder:
+                    levels = [os.path.join(diff_folder[difficulty], f)
+                              for f in os.listdir(diff_folder[difficulty])]
+                else:
+                    def counter_loop():
+                        nonlocal diff_val
+                        maximum = MAX_ADJ_DIFF * 100
+                        minimum = MIN_ADJ_DIFF * 100
+                        for num in range(maximum):
+                            ret = num + 1
+                            if ret + diff_val <= maximum:
+                                yield +ret
+                            if -ret + diff_val >= minimum:
+                                yield -ret
+
+                    for value in counter_loop():
+                        difficulty = "%03d" % value
+                        if difficulty in diff_folder:
+                            diff_val = value
+                            levels = [os.path.join(diff_folder[difficulty], f)
+                                      for f in os.listdir(diff_folder[difficulty])]
+                            break
+                        print("Nearest difficulty: " + difficulty)
+
+                difficulty_list = []
+                for level in levels:
+                    f, n = os.path.split(level)
+                    lev, tok = read_level_from_file(f, n)
+                    difficulty_list.append(one_hot_to_ascii_level(lev, tok))
+
+                localdf = level_obj.diff_df
+                localdf['Abweichung'] = abs(localdf['difficulty_score'] - float(diff_val / 100))
+                max_abweichung = localdf['Abweichung'].idxmax()
+                max_idx = int(max_abweichung) - 1
+                bounds = level_obj.slices[max_idx][0][1], level_obj.slices[max_idx][1][1]
+
+                border = patwidth_value.get() - 1
+                inbounds = max(bounds[0] - border, 0), min(bounds[1] + border, len(level_obj.ascii_level[0]) - 1)
+                tempslice1 = get_slice(inbounds)
+                ImgGen.render(tempslice1).show("3_original")
+
+                result = wfc_run("gen_testlevel", level_obj.ascii_level, abs(bounds[0] - bounds[1])+1,
+                                 len(level_obj.ascii_level), 100, OUT, bounds, difficulty_list)
+                replace_slice(bounds, result)
+                redraw_image()
+
+                tempslice2 = get_slice(inbounds)
+                ImgGen.render(tempslice2).show("3_wfc_inplace")
+                if tempslice1 == tempslice2:
+                    break
+                ai_iterate_level(kill=True)
+                diff_comp = abs(current_difficulty_value.get() - das_value.get())
+                delta = .05
+        is_loaded.set(True)
 
     # ---------------------------------------- Layout ----------------------------------------
 
@@ -958,7 +1022,7 @@ def TOAD_GUI():
     p_c_tabs.add(difficulty_frame, text="Difficulty Adjustment")
     iterate_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon,
                                 text='Determine difficulty with ai', state='disabled',
-                                command=lambda: spawn_thread(q, ai_iterate_level))
+                                command=lambda: spawn_thread(q, ai_iterate_level, "all", True))
     slice_its_var = IntVar()
     slice_its_var.set(4)
     slice_its_label = ttk.Label(difficulty_frame, text="Slice Iterations: ")
@@ -977,6 +1041,8 @@ def TOAD_GUI():
 
     current_difficulty_value.trace("w", callback=difficulty_value_changed)
 
+    MAX_ADJ_DIFF = float(max(os.listdir(DIFF_FOLDER_PATH))) / 100
+    MIN_ADJ_DIFF = float(min(os.listdir(DIFF_FOLDER_PATH))) / 100
     das_value = DoubleVar()
     das_value_entry = ttk.Entry(difficulty_frame, textvariable=das_value, width=4)
 
@@ -984,9 +1050,9 @@ def TOAD_GUI():
         das_value.set(round(das_value.get(), 2))
 
     das_label = ttk.Label(difficulty_frame, text="Difficulty Adjustment")
-    difficulty_adjustment_slider = ttk.Scale(difficulty_frame, from_=0.000, to=1.000, orient='horizontal', variable=das_value,
+    difficulty_adjustment_slider = ttk.Scale(difficulty_frame, from_=MIN_ADJ_DIFF, to=MAX_ADJ_DIFF, orient='horizontal', variable=das_value,
                                              command=d_slider_changed, length=250)
-    das_value.set(0.000)
+    das_value.set(.13)
 
     patwidth_value = IntVar()
     patwidth_value_entry = ttk.Entry(difficulty_frame, textvariable=patwidth_value, width=2)
@@ -1136,7 +1202,7 @@ def TOAD_GUI():
                           wraplength=250, bg="white")
 
     wfc_sample_button = ttk.Button(generation_label_frame, compound='top',  # image=extract_slices_icon,
-                                text='WFC Resample', command=lambda: spawn_thread(q, try_once))
+                                text='WFC Resample', command=lambda: spawn_thread(q, wfc_recreate))
     wfc_tooltip = Tooltip(wfc_sample_button,
                           text="Use WFC on all mario levels in all subfolders of the selected directory, "
                                "save generated levels in the gen/ directory of original contained subfolder",

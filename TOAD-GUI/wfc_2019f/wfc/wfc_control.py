@@ -45,6 +45,7 @@ import numpy as np
 import time
 import logging
 from numpy.typing import NDArray
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,20 @@ def set_ground_sky(pattern_grid, encoding, ground, sky):
             if len(sky_list) == 0:
                 sky_list = None
     return ground_list, sky_list
+
+
+class CustomThread(threading.Thread):
+    def __init__(self, target, args):
+        super().__init__(target=target, args=args)
+        self._result = None
+
+    def run(self):
+        # Der Thread führt die Verarbeitung durch und speichert das Ergebnis in _result
+        self._result = self._target(*self._args)
+
+    def result(self):
+        return self._result
+
 
 def execute_wfc(
     filename: Optional[str] = None,

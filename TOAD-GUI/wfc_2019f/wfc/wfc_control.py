@@ -82,37 +82,37 @@ def make_log_stats() -> Callable[[Dict[str, Any], str], None]:
     return log_stats
 
 
-def set_ground_sky(pattern_grid, encoding, ground, sky):
+def set_ground_sky(pattern_grid, encoding, ground, sky, gridlist=[]):
     ### Ground and Sky ###
     ''' Ground defines all patterns currently at Ground level edge which is determined by direction: e.g. 3 = Down
         If Sky is set, opposite edge is fixed too
     '''
-    # TODO implement ground and sky to be on the sides for other than mario levels
+    # TODO implement ground and sky with different orientations
     ground_list: Optional[NDArray[np.int64]] = None
     if ground == 3:
-        ground_list = np.vectorize(lambda x: encoding[x])(
-            pattern_grid[len(pattern_grid) - 1, :]
-        )
-        ground_list = set(ground_list)
+        ground_patterns = []
+        # Add all ground patterns, if they don't occure outside the ground level
+        for p in pattern_grid[-1, :]:
+            set_pattern = True
+            if p in pattern_grid[:-1, :]:
+                set_pattern = False
+            for grid in gridlist:
+                if p in grid[:-1, :]:
+                    set_pattern = False
+            if set_pattern:
+                ground_patterns.append(p)
+        if len(ground_patterns):
+            ground_list = np.vectorize(lambda x: encoding[x])(
+                ground_patterns
+            )
+            ground_list = set(ground_list)
+        else:
+            ground_list = set()
         if len(ground_list) == 0:
             ground_list = None
         if sky:
             sky_list = np.vectorize(lambda x: encoding[x])(
                 pattern_grid[0, :]
-            )
-            sky_list = set(sky_list)
-            if len(sky_list) == 0:
-                sky_list = None
-    if ground == 1:
-        ground_list = np.vectorize(lambda x: encoding[x])(
-            pattern_grid[0, :]
-        )
-        ground_list = set(ground_list)
-        if len(ground_list) == 0:
-            ground_list = None
-        if sky:
-            sky_list = np.vectorize(lambda x: encoding[x])(
-                pattern_grid[len(pattern_grid) - 1, :]
             )
             sky_list = set(sky_list)
             if len(sky_list) == 0:

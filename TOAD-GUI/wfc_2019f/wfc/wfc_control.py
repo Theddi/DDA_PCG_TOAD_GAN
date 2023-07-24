@@ -311,17 +311,6 @@ def execute_wfc(
     encode_patterns = {x: i for i, x in enumerate(pattern_list)}
     _encode_directions = {j: i for i, j in direction_offsets}
 
-    adjacency_list: Dict[Tuple[int, int], List[Set[int]]] = {}
-    for _, adjacency in direction_offsets:
-        adjacency_list[adjacency] = [set() for _ in pattern_weights]
-    # logger.debug(adjacency_list)
-    for adjacency, pattern1, pattern2 in adjacency_relations:
-        # logger.debug(adjacency)
-        # logger.debug(decode_patterns[pattern1])
-        adjacency_list[adjacency][encode_patterns[pattern1]].add(encode_patterns[pattern2])
-
-    logger.debug(f"adjacency: {len(adjacency_list)}")
-
     time_adjacency = time.perf_counter()
 
     ground_list, sky_list = set_ground_sky(pattern_grid, encode_patterns, ground, sky)
@@ -392,6 +381,17 @@ def execute_wfc(
     wave = makeWave(
         number_of_patterns, output_size[0], output_size[1], fixation, ground=ground_list, sky=sky_list, bound=bound_list
     )
+
+    adjacency_list: Dict[Tuple[int, int], List[Set[int]]] = {}
+    for idx, adjacency in direction_offsets:
+        adjacency_list[adjacency] = [set() for _ in range(number_of_patterns)]
+    # logger.debug(adjacency_list)
+    for adjacency, pattern1, pattern2 in adjacency_relations:
+        # logger.debug(adjacency)
+        # logger.debug(decode_patterns[pattern1])
+        adjacency_list[adjacency][encode_patterns[pattern1]].add(encode_patterns[pattern2])
+
+    logger.debug(f"adjacency: {len(adjacency_list)}")
 
     adjacency_matrix = makeAdj(adjacency_list, number_of_patterns)
 

@@ -237,9 +237,11 @@ def execute_wfc(
             if fix_outer_bounds:
                 fixation = pattern_width - 1
                 starting_bound = max(bounds[0] - fixation, 0)
-                ending_bound = min(bounds[1] + fixation, len(ascii_list[0]) - 1) + 1
-                output_size[0] += 2 * fixation
-                #print(fixation, starting_bound, ending_bound)
+                ending_bound = min(bounds[1] + fixation, len(ascii_list[0]) - 1)
+                left_fixation = abs(starting_bound - bounds[0])
+                right_fixation = abs(ending_bound - bounds[1])
+                ending_bound += 1
+                output_size[0] += left_fixation + right_fixation
             else:
                 starting_bound = bounds[0]
                 ending_bound = bounds[1]
@@ -314,24 +316,27 @@ def execute_wfc(
     time_adjacency = time.perf_counter()
 
     ground_list, sky_list = set_ground_sky(pattern_grid, encode_patterns, ground, sky)
+    pattern_grid_list = [pattern_grid]
 
     # Fixate outer bounds if set
     bound_list: Optional[NDArray[np.int64]] = None
     if fix_outer_bounds and bounds is not None:
-        bound_list = np.vectorize(lambda x: encode_patterns[x])(
-            pattern_grid[:, :fixation]
-        )
-        bound_list2 = np.vectorize(lambda x: encode_patterns[x])(
-            pattern_grid[:, -fixation:]
-        )
-        bound_list = np.concatenate((bound_list, bound_list2), axis=1)
-
-    import sys
-    np.set_printoptions(threshold=sys.maxsize)
+        if left_fixation:
+            bound_list = np.vectorize(lambda x: encode_patterns[x])(
+                pattern_grid[:, :left_fixation]
+            )
+        if right_fixation:
+            bound_list2 = np.vectorize(lambda x: encode_patterns[x])(
+                pattern_grid[:, -right_fixation:]
+            )
+        if left_fixation and right_fixation:
+            bound_list = np.concatenate((bound_list, bound_list2), axis=1)
+        elif right_fixation:
+            bound_list = bound_list2
 
     # Add additional patterns from determined difficulty slices
     if enable_difficulty_suggestion:
-        for af in difficulty_list:
+        def pattern_extraction(af):
             # Convert ascii_file to list
             al = [list(row) for row in af]
             for row in al:
@@ -344,7 +349,33 @@ def execute_wfc(
             (pc, pw, pl, pg) = make_pattern_catalog_with_rotations(
                 tg, pattern_width, input_is_periodic=input_periodic, rotations=rotations
             )
+            # Adjacency extraction
+            ar = adjacency_extraction(
+                pg,
+                pc,
+                direction_offsets,
+                (pattern_width, pattern_width),
+            )
+            return pc, pw, pl, pg, ar
 
+        num_threads = len(difficulty_list)
+        threads = []
+        for i in range(num_threads):
+            thread = CustomThread(target=pattern_extraction, args=(difficulty_list[i:i+1]))
+            threads.append(thread)
+            thread.start()
+
+        for thread in threads:
+            if thread.is_alive():
+                thread.join()
+
+        final_results = []
+        for i in range(num_threads):
+            if threads[i].result():
+                final_results.append(threads[i].result())
+
+        # Save extracted information
+        for pc, pw, pl, pg, ar in final_results:
             # Update pattern list with new patterns, preserving indices
             combined_array = np.concatenate((pattern_list, pl))
             unique_values, unique_indices = np.unique(combined_array, return_index=True)
@@ -353,17 +384,12 @@ def execute_wfc(
             # Update Ground and Sky Elements
             encode_patterns = {x: i for i, x in enumerate(pattern_list)}
             decode_patterns = dict(enumerate(pattern_list))
-            gl, sl = set_ground_sky(pg, encode_patterns, ground, sky)
+            gl, sl = set_ground_sky(pg, encode_patterns, ground, sky, pattern_grid_list)
+            pattern_grid_list.append(pg)
             ground_list = ground_list.union(gl)
             sky_list = sky_list.union(sl)
 
             # Add adjacencies of new patterns
-            ar = adjacency_extraction(
-                pg,
-                pc,
-                direction_offsets,
-                (pattern_width, pattern_width),
-            )
             adjacency_relations = adjacency_relations.union(ar)
 
             # Update pattern catalog and weights
@@ -375,11 +401,11 @@ def execute_wfc(
                     pattern_weights[key] = value
 
             number_of_patterns = len(pattern_weights)
-            print(number_of_patterns)
 
     print(pattern_catalog)
     wave = makeWave(
-        number_of_patterns, output_size[0], output_size[1], fixation, ground=ground_list, sky=sky_list, bound=bound_list
+        number_of_patterns, output_size[0], output_size[1], left_fixation, right_fixation,
+        ground=ground_list, sky=sky_list, bound=bound_list
     )
 
     adjacency_list: Dict[Tuple[int, int], List[Set[int]]] = {}
@@ -601,7 +627,7 @@ def execute_wfc(
             # conver ascii list to strings
             sol = ["".join(row) for row in sol]
             if fix_outer_bounds and bounds is not None:
-                sol = [row[fixation:-fixation] for row in sol]
+                sol = [row[left_fixation:-right_fixation] for row in sol]
             #print("Finish")
             return sol
 

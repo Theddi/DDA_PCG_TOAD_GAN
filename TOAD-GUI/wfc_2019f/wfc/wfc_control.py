@@ -48,7 +48,8 @@ from numpy.typing import NDArray
 import threading
 
 logger = logging.getLogger(__name__)
-
+difficulty_slices_cache = None
+difficulty_slices_cache_old = None
 
 def visualize_tiles(unique_tiles, tile_catalog, tile_grid):
     if False:
@@ -88,9 +89,8 @@ def set_ground_sky(pattern_grid, encoding, ground, sky, gridlist=[]):
         If Sky is set, opposite edge is fixed too
     '''
     # TODO implement ground and sky with different orientations
-    ground_list: Optional[NDArray[np.int64]] = None
     if ground == 3:
-        ground_patterns = []
+        ground_patterns = {}
         # Add all ground patterns, if they don't occure outside the ground level
         for p in pattern_grid[-1, :]:
             set_pattern = True
@@ -99,17 +99,9 @@ def set_ground_sky(pattern_grid, encoding, ground, sky, gridlist=[]):
             for grid in gridlist:
                 if p in grid[:-1, :]:
                     set_pattern = False
-            if set_pattern:
-                ground_patterns.append(p)
-        if len(ground_patterns):
-            ground_list = np.vectorize(lambda x: encoding[x])(
-                ground_patterns
-            )
-            ground_list = set(ground_list)
-        else:
-            ground_list = set()
-        if len(ground_list) == 0:
-            ground_list = None
+            ground_patterns[encoding[p]] = set_pattern
+        if len(ground_patterns) == 0:
+            ground_patterns = None
         if sky:
             sky_list = np.vectorize(lambda x: encoding[x])(
                 pattern_grid[0, :]
@@ -117,7 +109,7 @@ def set_ground_sky(pattern_grid, encoding, ground, sky, gridlist=[]):
             sky_list = set(sky_list)
             if len(sky_list) == 0:
                 sky_list = None
-    return ground_list, sky_list
+    return ground_patterns, sky_list
 
 
 class CustomThread(threading.Thread):
@@ -165,6 +157,13 @@ def execute_wfc(
 ) -> NDArray[np.integer]:
     timecode = datetime.datetime.now().isoformat().replace(":", ".")
     time_begin = time.perf_counter()
+
+    use_diff_cache = False
+    global difficulty_slices_cache_old
+    if difficulty_slices_cache_old == difficulty_list:
+        use_diff_cache = True
+    else:
+        difficulty_slices_cache_old = difficulty_list
 
     rotations -= 1  # change to zero-based
 
@@ -315,7 +314,7 @@ def execute_wfc(
 
     time_adjacency = time.perf_counter()
 
-    ground_list, sky_list = set_ground_sky(pattern_grid, encode_patterns, ground, sky)
+    ground_dict, sky_list = set_ground_sky(pattern_grid, encode_patterns, ground, sky)
     pattern_grid_list = [pattern_grid]
 
     # Fixate outer bounds if set
@@ -336,43 +335,48 @@ def execute_wfc(
 
     # Add additional patterns from determined difficulty slices
     if enable_difficulty_suggestion:
-        def pattern_extraction(af):
-            # Convert ascii_file to list
-            al = [list(row) for row in af]
-            for row in al:
-                if '\n' in row:
-                    row.remove('\n')
-            al = [[ord(tok) for tok in row] for row in al]
+        global difficulty_slices_cache
+        if difficulty_slices_cache is None or not use_diff_cache:
+            def pattern_extraction(af):
+                # Convert ascii_file to list
+                al = [list(row) for row in af]
+                for row in al:
+                    if '\n' in row:
+                        row.remove('\n')
+                al = [[ord(tok) for tok in row] for row in al]
 
-            # Pattern extraction of new level
-            tg, cl, ut = make_mario_catalog(al)
-            (pc, pw, pl, pg) = make_pattern_catalog_with_rotations(
-                tg, pattern_width, input_is_periodic=input_periodic, rotations=rotations
-            )
-            # Adjacency extraction
-            ar = adjacency_extraction(
-                pg,
-                pc,
-                direction_offsets,
-                (pattern_width, pattern_width),
-            )
-            return pc, pw, pl, pg, ar
+                # Pattern extraction of new level
+                tg, cl, ut = make_mario_catalog(al)
+                (pc, pw, pl, pg) = make_pattern_catalog_with_rotations(
+                    tg, pattern_width, input_is_periodic=input_periodic, rotations=rotations
+                )
+                # Adjacency extraction
+                ar = adjacency_extraction(
+                    pg,
+                    pc,
+                    direction_offsets,
+                    (pattern_width, pattern_width),
+                )
+                return pc, pw, pl, pg, ar
 
-        num_threads = len(difficulty_list)
-        threads = []
-        for i in range(num_threads):
-            thread = CustomThread(target=pattern_extraction, args=(difficulty_list[i:i+1]))
-            threads.append(thread)
-            thread.start()
+            num_threads = len(difficulty_list)
+            threads = []
+            for i in range(num_threads):
+                thread = CustomThread(target=pattern_extraction, args=(difficulty_list[i:i+1]))
+                threads.append(thread)
+                thread.start()
 
-        for thread in threads:
-            if thread.is_alive():
-                thread.join()
+            for thread in threads:
+                if thread.is_alive():
+                    thread.join()
 
-        final_results = []
-        for i in range(num_threads):
-            if threads[i].result():
-                final_results.append(threads[i].result())
+            final_results = []
+            for i in range(num_threads):
+                if threads[i].result():
+                    final_results.append(threads[i].result())
+            difficulty_slices_cache = final_results
+        else:
+            final_results = difficulty_slices_cache
 
         # Save extracted information
         for pc, pw, pl, pg, ar in final_results:
@@ -386,7 +390,11 @@ def execute_wfc(
             decode_patterns = dict(enumerate(pattern_list))
             gl, sl = set_ground_sky(pg, encode_patterns, ground, sky, pattern_grid_list)
             pattern_grid_list.append(pg)
-            ground_list = ground_list.union(gl)
+            for key in gl:
+                if key in ground_dict:
+                    ground_dict[key] = ground_dict[key] and gl[key]
+                else:
+                    ground_dict[key] = gl[key]
             sky_list = sky_list.union(sl)
 
             # Add adjacencies of new patterns
@@ -402,11 +410,25 @@ def execute_wfc(
 
             number_of_patterns = len(pattern_weights)
 
-    print(pattern_catalog)
     wave = makeWave(
         number_of_patterns, output_size[0], output_size[1], left_fixation, right_fixation,
-        ground=ground_list, sky=sky_list, bound=bound_list
+        ground=ground_dict, sky=sky_list, bound=bound_list
     )
+
+    # Check i every position has a true value
+    #for h in range(output_size[1]):
+    #    for w in range(output_size[0]):
+    #        if True not in wave[:, w, h]:
+    #            print(f"Position has no True Pattern w: {w}, h: {h}")
+    #    # Especially check boundaries
+    #    if left_fixation:
+    #        for l in range(left_fixation):
+    #            if True not in wave[:, l, h]:
+    #                print(f"l: {l}, h: {h}")
+    #    if right_fixation:
+    #        for r in range(right_fixation):
+    #            if True not in wave[:, -r, h]:
+    #                 print(f"-r: {r}, h: {h}")
 
     adjacency_list: Dict[Tuple[int, int], List[Set[int]]] = {}
     for idx, adjacency in direction_offsets:

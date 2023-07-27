@@ -26,7 +26,7 @@ def unique_patterns_2d(agrid: NDArray[np.int64], ksize: int, periodic_input: boo
         agrid = np.pad(
             agrid,
             ((0, ksize - 1), (0, ksize - 1), *(((0, 0),) * (len(agrid.shape) - 2))),
-            mode="constant", constant_values=ord('-')
+            mode="wrap",  # mode="constant", constant_values=ord('-')
         )
 
     patches: NDArray[np.int64] = np.lib.stride_tricks.as_strided(

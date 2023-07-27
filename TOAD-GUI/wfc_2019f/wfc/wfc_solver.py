@@ -114,13 +114,11 @@ class Solver:
 def makeWave(number_patterns: int, w: int, h: int, lf: int, rf: int, ground: Optional[Iterable[int]] = None, sky: Optional[Iterable[int]] = None,
              bound: Optional[Iterable[int]] = None
              ) -> NDArray[numpy.bool_]:
-    import sys
-    np.set_printoptions(threshold=sys.maxsize)
     wave: NDArray[numpy.bool_] = numpy.ones((number_patterns, w, h), dtype=numpy.bool_)
     if ground is not None:
         wave[:, :, h - 1] = False
         for g in ground:
-            if g not in sky:
+            if g not in sky and ground[g]:
                 wave[g, :, :] = False
             wave[g, :, h - 1] = True
     if sky is not None:

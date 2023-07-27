@@ -568,14 +568,16 @@ def TOAD_GUI():
     def set_mario_finish(mar_fin):
         for height, line in enumerate(level_obj.ascii_level):
             for length, tok in enumerate(line):
-                if height == mar_fin[0][0] and length == mar_fin[0][1]:
-                    tmp_slice = list(level_obj.ascii_level[height])
-                    tmp_slice[length] = 'M'
-                    level_obj.ascii_level[height] = "".join(tmp_slice)
-                if height == mar_fin[1][0] and length == mar_fin[1][1]:
-                    tmp_slice = list(level_obj.ascii_level[height])
-                    tmp_slice[length] = 'F'
-                    level_obj.ascii_level[height] = "".join(tmp_slice)
+                if mar_fin[0]:
+                    if height == mar_fin[0][0] and length == mar_fin[0][1]:
+                        tmp_slice = list(level_obj.ascii_level[height])
+                        tmp_slice[length] = 'M'
+                        level_obj.ascii_level[height] = "".join(tmp_slice)
+                if mar_fin[1]:
+                    if height == mar_fin[1][0] and length == mar_fin[1][1]:
+                        tmp_slice = list(level_obj.ascii_level[height])
+                        tmp_slice[length] = 'F'
+                        level_obj.ascii_level[height] = "".join(tmp_slice)
         return mar_fin
 
     def ai_iterate_level(clear="all", kill=False):
@@ -777,39 +779,7 @@ def TOAD_GUI():
         return result
 
     def try_once():
-        folder, name = os.path.split(r"C:\Studium\Bachelorarbeit_save\DDA_PCG_TOAD_GAN\TOAD-GUI\levels\originals\lvl_6-2.txt")
-        lev, tok = read_level_from_file(folder, name)
-        slice_ascii = one_hot_to_ascii_level(lev, tok)
-
-        for height, line in enumerate(slice_ascii):
-            for length, tok in enumerate(line):
-                if tok == 'M' or tok == 'F':
-                    tmp_slice = list(slice_ascii[height])
-                    tmp_slice[length] = '-'
-                    slice_ascii[height] = "".join(tmp_slice)
-
-        genpath = os.path.join(folder, "gen/")
-        if not os.path.exists(genpath):
-            os.makedirs(genpath)
-
-        difficulty = "013"
-        diff_folder = {f: os.path.join(DIFF_FOLDER_PATH, f) for f in os.listdir(DIFF_FOLDER_PATH)}
-        levels = [os.path.join(diff_folder[difficulty], f) for f in os.listdir(diff_folder[difficulty])]
-
-        difficulty_list = []
-        for level in levels:
-            f, n = os.path.split(level)
-            lev, tok = read_level_from_file(f, n)
-            difficulty_list.append(one_hot_to_ascii_level(lev, tok))
-
-        bounds = 40, 64
-        inbounds = bounds[0] - 4, bounds[1] + 4
-        ImgGen.render(get_slice(inbounds, slice_ascii)).show("3_original")
-        result = wfc_run("gen_testlevel", slice_ascii, slice_length_var.get(),
-                         len(slice_ascii), 100, OUT, bounds, difficulty_list, "random")
-        ImgGen.render(result).show("3_wfc_result")
-        replace_slice(bounds, result, slice_ascii)
-        ImgGen.render(get_slice(inbounds, slice_ascii)).show("3_replace")
+        pass
 
     def wfc_recreate():
         da_progressbar['value'] = 0
@@ -891,7 +861,7 @@ def TOAD_GUI():
                 ImgGen.render(tempslice1).show("3_original")
 
                 result = wfc_run("gen_testlevel", level_obj.ascii_level, abs(bounds[0] - bounds[1])+1,
-                                 len(level_obj.ascii_level), 100, OUT, bounds, difficulty_list)
+                                 len(level_obj.ascii_level), 100, OUT, bounds, difficulty_list, "random")
                 replace_slice(bounds, result)
                 redraw_image()
 
@@ -901,7 +871,7 @@ def TOAD_GUI():
                     break
                 ai_iterate_level(kill=True)
                 diff_comp = abs(current_difficulty_value.get() - das_value.get())
-                delta = .05
+                delta = .04
         is_loaded.set(True)
 
     # ---------------------------------------- Layout ----------------------------------------

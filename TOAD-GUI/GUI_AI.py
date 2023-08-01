@@ -871,7 +871,7 @@ def TOAD_GUI():
                     break
                 ai_iterate_level(kill=True)
                 diff_comp = abs(current_difficulty_value.get() - das_value.get())
-                delta = .04
+                delta = .03
         is_loaded.set(True)
 
     # ---------------------------------------- Layout ----------------------------------------

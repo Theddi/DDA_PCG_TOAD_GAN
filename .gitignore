@@ -180,6 +180,7 @@ cython_debug/
 markovjuniorpy/src/environment.txt
 *.class
 **/tmp/
+**/gen/
 
 # Ignores because of unknown duplicate creation
 *(*).*

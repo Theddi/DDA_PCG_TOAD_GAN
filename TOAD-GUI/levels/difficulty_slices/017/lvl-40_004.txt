@@ -1,0 +1,16 @@
+------------------------
+------------------------
+------------------------
+-g----------------------
+XX--X-------------------
+XX--XXX----XXX----------
+-X--XXX----XXXX---------
+-X--XXXX---XXXX---------
+----XXX----XXXX---------
+----XXX---XXXXX---------
+-DD-XXX----XXXXX--------
+-D--XXXX---XXXXXX------o
+-DD-XXX----XXXXXX------o
+--D-XXX---XXXXXXXXX-X--o
+-DD-XXXooooXXXXXXXXXXXXX
+----XXXXXXXXXXXXXXXXXXXX

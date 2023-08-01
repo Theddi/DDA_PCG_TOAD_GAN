@@ -1,0 +1,16 @@
+-----------------D------
+-----------------D------
+-----YYY--g------DD-----
+-----DDD-DDTT----oD-----
+-------D-DDtt--TToDDD---
+-------D---tt--tto--D---
+-----D-D---ttTTttTT-D-D-
+-----o-D---ttttttttoD---
+-----o-D---tttttttto--D-
+D-DDDDDD---tttttttto----
+-----------ttttttttDTTD-
+-----------tttttttt-tt--
+-----------tttttttt-tt--
+-----------tttttttt-tt--
+-----------tttttttt-tt--
+-----------tttttttt-tt-X

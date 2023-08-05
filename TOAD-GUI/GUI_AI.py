@@ -26,7 +26,11 @@ import shutil
 import json
 import pandas as pd
 import numpy as np
+from datetime import datetime
 
+def checkmakepath(path):
+    if not os.path.exists(path):
+        os.makedirs(path)
 # PATHS
 CURDIR = os.path.abspath(os.path.curdir)
 # Path to the AI Framework jar for Playing levels
@@ -34,9 +38,7 @@ MARIO_AI_PATH = os.path.join(CURDIR, "Mario-AI-Framework/mario-1.0-SNAPSHOT.jar"
 MARIO_AI_PATH_NEW = os.path.join(CURDIR, "Mario-AI-Framework/Mario-AI-FrameworkImproved.jar")
 # Output folder
 OUT = os.path.join(CURDIR, "tmp/")
-pathExist = os.path.exists(OUT)
-if not pathExist:
-    os.makedirs(OUT)
+checkmakepath(OUT)
 # Path for game results
 GAME_RESULT_PATH = os.path.join(OUT, "results.txt")
 # Difficulty slice folder
@@ -286,7 +288,7 @@ def TOAD_GUI():
 
         return
 
-    def save_txt(current=False, name=level_obj.name):
+    def save_txt(current=False, name=level_obj.name, path=OUT):
         if not current:
             save_name = fd.asksaveasfile(title='Save level (.txt/.png)', initialdir=os.path.join(os.curdir, "levels"),
                                          mode='w', defaultextension=".txt",
@@ -303,7 +305,7 @@ def TOAD_GUI():
                 error_msg.set("Could not save level with this extension. Supported: .txt, .png")
             return
         else:
-            genFilePath = os.path.join(OUT, name + ".txt")
+            genFilePath = os.path.join(path, name + ".txt")
             with open(genFilePath, 'w') as save_name:
                 text2save = ''.join(level_obj.ascii_level)
                 save_name.write(text2save)
@@ -322,7 +324,9 @@ def TOAD_GUI():
             sc_l = level_l.get() / toadgan_obj.reals[-1].shape[-1]
 
             # Generate level
-            level_obj.name = genName + "_C" + str(genCounter)
+            now = datetime.now()
+            date_time = now.strftime("%d-%m-%y_%H-%M")
+            level_obj.name = genName + f"_{date_time}_{genCounter}"
 
             level, scales, noises = generate_sample(toadgan_obj.Gs, toadgan_obj.Zs, toadgan_obj.reals,
                                                     toadgan_obj.NoiseAmp, toadgan_obj.num_layers,
@@ -697,14 +701,15 @@ def TOAD_GUI():
 
         # Get level difficulty by slice average
         level_difficulty = slice_difficulty_df[['difficulty_score']].mean()[0]
-        level_difficulty_df = pd.concat([slice_difficulty_df,
-                                         pd.DataFrame([{'difficulty_score': level_difficulty}],
-                                                      index = ['Full'], columns = slice_difficulty_df.columns)])
         current_difficulty_value.set(round(level_difficulty, 3))
 
-        fig = level_difficulty_df.plot(x=level_difficulty_df.index.name, xlabel="Slice",
-                                       y="difficulty_score", ylabel="Difficulty", kind="bar").get_figure()
-        fig.savefig(OUT+"Difficulty_Plot.png")
+        # Optional plotting
+        # level_difficulty_df = pd.concat([slice_difficulty_df,
+        #                                 pd.DataFrame([{'difficulty_score': level_difficulty}],
+        #                                              index = ['Full'], columns = slice_difficulty_df.columns)])
+        # fig = level_difficulty_df.plot(x=level_difficulty_df.index.name, xlabel="Slice",
+        #                                y="difficulty_score", ylabel="Difficulty", kind="bar").get_figure()
+        # fig.savefig(OUT+"Difficulty_Plot.png")
 
         # Save slice information into level object
         level_obj.is_sliced = True
@@ -731,8 +736,7 @@ def TOAD_GUI():
 
     def save_slice(bounds, folder=OUT, name="slice"):
         slice_ascii = []
-        if not os.path.exists(folder):
-            os.makedirs(folder)
+        checkmakepath(folder)
 
         for row in level_obj.ascii_level:
             slice_ascii.append(row[bounds[0]:bounds[1]+1])
@@ -800,8 +804,7 @@ def TOAD_GUI():
                 length, height = len(slice_ascii[0])-1, len(slice_ascii)
 
                 genpath = os.path.join(folder, "gen/")
-                if not os.path.exists(genpath):
-                    os.makedirs(genpath)
+                checkmakepath(genpath)
                 threads.append(spawn_thread(q, wfc_run, name[:-4], slice_ascii,
                                             length, height, (100 / llen) * (1 / sdlen), genpath)
                                )
@@ -809,45 +812,62 @@ def TOAD_GUI():
             t.join()
         da_progressbar['value'] = 100
 
-    def difficulty_adjust(delta=.01):
+    def difficulty_adjust(delta=.01, number_adjustments=15, saveprogress=True):
         error_msg.set("Difficulty adjustment initiated")
         is_loaded.set(False)
-        diff_comp = abs(current_difficulty_value.get() - das_value.get())
-        while diff_comp > delta:
-            error_msg.set(f"Current difficulty delta {diff_comp} > {delta} to overcome")
+        production_name = level_obj.name.replace(".txt", "")
+        img_ext = ".png"
+        if saveprogress:
+            PROGRESSPATH = os.path.join(OUT, "difficulty_adjustment/")
+            PROGRESSPATH = os.path.join(PROGRESSPATH, production_name + "/")
+            checkmakepath(PROGRESSPATH)
+            save_txt(True, f"init_{production_name}", PROGRESSPATH)
+            level_obj.diff_df.to_csv(os.path.join(PROGRESSPATH, "init_diff.csv"))
+        adjustnumberrange = [i for i in range(number_adjustments)]
+        curdiff = current_difficulty_value.get()
+        goaldiff = das_value.get()
+        diff_comp = abs(curdiff - goaldiff)
+        while diff_comp > delta and number_adjustments > 0:
+            error_msg.set(f"Current difficulty delta {round(diff_comp, 3)} > {delta} to overcome")
+            if saveprogress:
+                curnum = str(adjustnumberrange[-number_adjustments])
+                ITERATIONPATH = os.path.join(PROGRESSPATH, f"{curnum}_{curdiff}-{goaldiff}/")
+                checkmakepath(ITERATIONPATH)
+
+            difficulty_list = []
             if level_obj.is_sliced:
-                diff_val = int(das_value.get() * 100)
-                difficulty = "%03d" % diff_val
-                diff_folder = {f: os.path.join(DIFF_FOLDER_PATH, f) for f in os.listdir(DIFF_FOLDER_PATH)}
-                if difficulty in diff_folder:
-                    levels = [os.path.join(diff_folder[difficulty], f)
-                              for f in os.listdir(diff_folder[difficulty])]
-                else:
-                    def counter_loop():
-                        nonlocal diff_val
-                        maximum = MAX_ADJ_DIFF * 100
-                        minimum = MIN_ADJ_DIFF * 100
-                        for num in range(maximum):
-                            ret = num + 1
-                            if ret + diff_val <= maximum:
-                                yield +ret
-                            if -ret + diff_val >= minimum:
-                                yield -ret
+                if not len(difficulty_list):
+                    diff_val = int(goaldiff * 100)
+                    difficulty = "%03d" % diff_val
+                    diff_folder = {f: os.path.join(DIFF_FOLDER_PATH, f) for f in os.listdir(DIFF_FOLDER_PATH)}
+                    if difficulty in diff_folder:
+                        levels = [os.path.join(diff_folder[difficulty], f)
+                                  for f in os.listdir(diff_folder[difficulty])]
+                    else:
+                        def counter_loop():
+                            nonlocal diff_val
+                            maximum = MAX_ADJ_DIFF * 100
+                            minimum = MIN_ADJ_DIFF * 100
+                            for num in range(maximum):
+                                ret = num + 1
+                                if ret + diff_val <= maximum:
+                                    yield +ret
+                                if -ret + diff_val >= minimum:
+                                    yield -ret
 
-                    for value in counter_loop():
-                        difficulty = "%03d" % value
-                        if difficulty in diff_folder:
-                            diff_val = value
-                            levels = [os.path.join(diff_folder[difficulty], f)
-                                      for f in os.listdir(diff_folder[difficulty])]
-                            break
-                        print("Nearest difficulty: " + difficulty)
+                        for value in counter_loop():
+                            difficulty = "%03d" % value
+                            if difficulty in diff_folder:
+                                diff_val = value
+                                levels = [os.path.join(diff_folder[difficulty], f)
+                                          for f in os.listdir(diff_folder[difficulty])]
+                                break
+                            print("Nearest difficulty: " + difficulty, file=sys.stderr)
 
-                difficulty_list = []
-                for level in levels:
-                    f, n = os.path.split(level)
-                    lev, tok = read_level_from_file(f, n)
-                    difficulty_list.append(one_hot_to_ascii_level(lev, tok))
+                    for level in levels:
+                        f, n = os.path.split(level)
+                        lev, tok = read_level_from_file(f, n)
+                        difficulty_list.append(one_hot_to_ascii_level(lev, tok))
 
                 localdf = level_obj.diff_df
                 localdf['Abweichung'] = abs(localdf['difficulty_score'] - float(diff_val / 100))
@@ -855,23 +875,50 @@ def TOAD_GUI():
                 max_idx = int(max_abweichung) - 1
                 bounds = level_obj.slices[max_idx][0][1], level_obj.slices[max_idx][1][1]
 
+                # Pre run slice
                 border = patwidth_value.get() - 1
                 inbounds = max(bounds[0] - border, 0), min(bounds[1] + border, len(level_obj.ascii_level[0]) - 1)
-                tempslice1 = get_slice(inbounds)
-                ImgGen.render(tempslice1).show("3_original")
+                tempslice = get_slice(inbounds)
 
-                result = wfc_run("gen_testlevel", level_obj.ascii_level, abs(bounds[0] - bounds[1])+1,
-                                 len(level_obj.ascii_level), 100, OUT, bounds, difficulty_list, "random")
+                if saveprogress:
+                    ImgGen.render(level_obj.ascii_level).save(
+                        os.path.join(ITERATIONPATH, f"pre_{curdiff}_{production_name}{img_ext}"))
+                    slice_diff = round(localdf['difficulty_score'].iloc[max_idx], 3)
+                    slice_name = f"slice{max_idx}_{slice_diff}_{bounds[0]}-{bounds[1]}_in{img_ext}"
+                    ImgGen.render(tempslice).save(os.path.join(ITERATIONPATH, slice_name))
+
+                # Run WFC generation
+                result = wfc_run("wfc_gen", level_obj.ascii_level, abs(bounds[0] - bounds[1])+1,
+                                 len(level_obj.ascii_level), 100, ITERATIONPATH if saveprogress else OUT,
+                                 bounds, difficulty_list)
+
+                # Replace slice with generated one and reevaluate
                 replace_slice(bounds, result)
                 redraw_image()
+                ai_iterate_level(clear="results", kill=True)
+                curdiff = current_difficulty_value.get()
 
+                # After run slice
                 tempslice2 = get_slice(inbounds)
-                ImgGen.render(tempslice2).show("3_wfc_inplace")
-                if tempslice1 == tempslice2:
+
+                if saveprogress:
+                    localdf.to_csv(os.path.join(ITERATIONPATH, "diff.csv"))
+                    ImgGen.render(level_obj.ascii_level).save(
+                        os.path.join(ITERATIONPATH, f"post_{curdiff}_{production_name}{img_ext}"))
+                    save_txt(True, f"post_{curdiff}_{production_name}", ITERATIONPATH)
+                    slice_diff = round(level_obj.diff_df['difficulty_score'].iloc[max_idx], 3)
+                    slice_name = f"slice{max_idx}_{slice_diff}_{bounds[0]}-{bounds[1]}_out{img_ext}"
+                    ImgGen.render(tempslice2).save(os.path.join(ITERATIONPATH, slice_name))
+
+                # Abort further runs, when same output is generated, due to looping
+                if tempslice == tempslice2:
+                    print("Same Output Twice", file=sys.stderr)
                     break
-                ai_iterate_level(kill=True)
-                diff_comp = abs(current_difficulty_value.get() - das_value.get())
+
+                diff_comp = abs(curdiff - goaldiff)
                 delta = .03
+                number_adjustments -= 1
+        error_msg.set(f"Difficulty adjustment finished")
         is_loaded.set(True)
 
     # ---------------------------------------- Layout ----------------------------------------
@@ -1079,8 +1126,7 @@ def TOAD_GUI():
                 outpath = os.path.abspath(filepath).replace(CURDIR, "")
                 outpath = os.path.abspath(OUT[:-1] + outpath)
                 folder, name = os.path.split(outpath)
-                if not os.path.exists(folder):
-                    os.makedirs(folder)
+                checkmakepath(folder)
 
                 ascii_to_image(filepath, outpath)
 

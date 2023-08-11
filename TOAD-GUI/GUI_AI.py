@@ -343,7 +343,7 @@ def TOAD_GUI():
 
             is_loaded.set(True)
             set_button_state(None, None, None)
-            print("Level generated!")
+            #print("Level generated!")
             error_msg.set("Level generated!")
         return
 
@@ -598,7 +598,7 @@ def TOAD_GUI():
 
         # Testing full level with strongest ai, to check if it's completable
         current_difficulty_label.config(text="Current Difficulty: playtesting...")
-        testthread = spawn_thread(q, play_level, "astar", False, 60, True, True, None, level_obj.name, kill)
+        testthread = spawn_thread(q, play_level, "astar", False, 60, False, True, None, level_obj.name, kill)
         testthread.join()
 
         current_difficulty_label.config(text="Current Difficulty: determining...")
@@ -892,6 +892,9 @@ def TOAD_GUI():
                                  len(level_obj.ascii_level), 100, ITERATIONPATH if saveprogress else OUT,
                                  bounds, difficulty_list)
 
+                if result is None:
+                    print("No result Error", file=sys.stderr)
+
                 # Replace slice with generated one and reevaluate
                 replace_slice(bounds, result)
                 redraw_image()
@@ -1039,7 +1042,7 @@ def TOAD_GUI():
     p_c_tabs.add(difficulty_frame, text="Difficulty Adjustment")
     iterate_button = ttk.Button(difficulty_frame, compound='top', image=iterate_level_icon,
                                 text='Determine difficulty with ai', state='disabled',
-                                command=lambda: spawn_thread(q, ai_iterate_level, "all", True))
+                                command=lambda: spawn_thread(q, ai_iterate_level, "results", True))
     slice_its_var = IntVar()
     slice_its_var.set(4)
     slice_its_label = ttk.Label(difficulty_frame, text="Slice Iterations: ")

@@ -749,7 +749,7 @@ def TOAD_GUI():
         levels = [os.path.join(d, f) for f in os.listdir(d) if f[-3:] == "txt"]
         for l in levels:
             load_level_by_path(l)
-            ai_iterate_level("results")
+            ai_iterate_level("results", True)
             if level_obj.is_sliced:
                 marfin = delete_mario_finish()
                 for idx in level_obj.diff_df.index:

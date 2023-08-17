@@ -212,6 +212,8 @@ def execute_wfc(
 
     # TODO: generalize this to more than the four cardinal directions
     direction_offsets = list(enumerate([(0, -1), (1, 0), (0, 1), (-1, 0)]))
+    left_fixation = None
+    right_fixation = None
 
     if not mario_version:
         tile_catalog, tile_grid, _code_list, _unique_tiles = make_tile_catalog(image, tile_size)

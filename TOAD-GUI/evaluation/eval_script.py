@@ -168,38 +168,41 @@ def getDuplicateAbortPlot():
     # Per Gen
     genframe = statframe.iloc[:-2]
     plt.figure(figsize=(10, 6))
-    plt.xticks(rotation=45)
-    plt.xticks(range(len(genframe.index)), genframe.index)
-    plt.bar(range(len(genframe.index)), genframe['sum_gen'], label='Summe Duplikate', color='orange', alpha=0.8)
-    plt.bar(range(len(genframe.index)), genframe['gen_abort'], label='Anzahl Abbrüche', color='red', alpha=0.7)
+    idx_size = len(genframe.index)
+    xticks = range(idx_size)
+    plt.xticks(xticks, genframe.index, rotation=45)
+    plt.bar(xticks, genframe['sum_gen'], label='Summe Duplikate', color='orange', alpha=0.8)
+    plt.bar(xticks, genframe['gen_abort'], label='Anzahl Wertungsausfälle', color='red', alpha=0.7)
     for step in range(int(min(genframe['sum_gen'])), int(max(genframe['sum_gen'])) + 1):
         plt.axhline(y=step, color='gray', linestyle='-', linewidth=0.8, zorder=-1, alpha=.5)
     plt.xlabel('Generator')
     plt.ylabel('Anzahl')
     plt.yticks(np.arange(0, round(genframe['sum_gen'].max())+1, 1))
-    plt.legend()
+    plt.legend(loc='upper center')
     plt.tight_layout()
     plt.savefig(os.path.join(TMP_PATH, 'dup_per_gen.png'))
 
     # Per Goal
     goalframe = statframe.T.iloc[:-2]
     plt.figure(figsize=(10, 6))
-    plt.xticks(range(len(goalframe.index)), goalframe.index)
-    plt.bar(range(len(goalframe.index)), goalframe['sum_goal'], label='Summe Duplikate', color='orange', alpha=0.8)
-    plt.bar(range(len(goalframe.index)), goalframe['goal_abort'], label='Anzahl Abbrüche', color='red', alpha=0.7)
+    idx_size = len(goalframe.index)
+    xticks = range(idx_size)
+    plt.xticks(xticks, goalframe.index)
+    plt.bar(xticks, goalframe['sum_goal'], label='Summe Duplikate', color='orange', alpha=0.8)
+    plt.bar(xticks, goalframe['goal_abort'], label='Anzahl Wertungsausfälle', color='red', alpha=0.7)
     for step in range(int(min(goalframe['sum_goal'])), int(max(goalframe['sum_goal'])) + 1):
         plt.axhline(y=step, color='gray', linestyle='-', linewidth=0.8, zorder=-1, alpha=.5)
     plt.xlabel('Zielschwierigkeitsklasse')
     plt.ylabel('Anzahl')
     plt.yticks(np.arange(0, round(goalframe['sum_goal'].max())+1, 1))
-    plt.legend()
+    plt.legend(loc='upper center')
     plt.tight_layout()
     plt.savefig(os.path.join(TMP_PATH, 'dup_per_goal.png'))
 
 #getGenPlot()
 #getDiffPlot()
 #getDiffAdjustPlot()
-#getDuplicateAbortPlot()
+getDuplicateAbortPlot()
 
 def getDiffFilePlot(path, barfont=False, fontsize=9, name="slice_per_diff", filtergoal=False):
     difficulty_classes = {f: os.path.join(path, f) for f in os.listdir(path)}
@@ -230,5 +233,5 @@ def getDiffFilePlot(path, barfont=False, fontsize=9, name="slice_per_diff", filt
     plt.savefig(os.path.join(TMP_PATH, name + '.png'))
 
 
-getDiffFilePlot(DIFF_SLICE_PATH, True, filtergoal=True)
+#getDiffFilePlot(DIFF_SLICE_PATH, True, filtergoal=True)
 #getDiffFilePlot(ALT_DIFF_SLICE_PATH, True, None, "slice_per_diff_extratest")
